@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//f/files/MonitorDashboard/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

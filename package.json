@@ -1,0 +1,26 @@
+{
+  "name": "monitor-dashboard",
+  "version": "1.0.0",
+  "description": "系统监控 Web 面板，具备基础监控展示、交互与可视化，模拟数据驱动功能",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 8080",
+    "dev": "python -m http.server 8080"
+  },
+  "keywords": [
+    "monitoring",
+    "dashboard",
+    "visualization",
+    "system"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "echarts": "^5.4.3"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.10"
+  }
+}
