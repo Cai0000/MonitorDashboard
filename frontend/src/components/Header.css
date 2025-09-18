@@ -27,6 +27,8 @@
 
 .search-container {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .search-input {
@@ -44,6 +46,42 @@
   outline: none;
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+}
+
+.search-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.search-btn:hover {
+  color: var(--accent-blue);
+  background-color: rgba(0, 212, 255, 0.1);
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 35px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: bold;
+  transition: all 0.3s ease;
+}
+
+.search-clear-btn:hover {
+  color: var(--error-red);
+  background-color: rgba(255, 71, 87, 0.1);
 }
 
 .header-center {

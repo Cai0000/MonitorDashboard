@@ -4,6 +4,7 @@ import api from '../services/api';
 export const useApiData = () => {
   const [isStreaming, setIsStreaming] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSearchActive, setIsSearchActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -13,6 +14,7 @@ export const useApiData = () => {
   const [loadBalance, setLoadBalance] = useState({});
   const [chartData, setChartData] = useState([]);
   const [systemHealth, setSystemHealth] = useState({});
+  const [serverTags, setServerTags] = useState([]);
 
   // 转换后端数据格式为前端需要的格式
   const transformData = useCallback((data) => {
@@ -67,19 +69,23 @@ export const useApiData = () => {
         value: Math.round(item.value)
       })) || [];
 
+    // 获取服务器标签
+    const uniqueTags = [...new Set(data.servers?.flatMap(server => server.tags) || [])];
+
     return {
       tasks: transformedTasks,
       alerts: transformedAlerts,
       metrics: transformedMetrics,
       loadBalance: transformedLoadBalance,
       chartData: transformedChartData,
-      systemHealth: data.system_health || {}
+      systemHealth: data.system_health || {},
+      serverTags: uniqueTags
     };
   }, []);
 
   // 获取数据
   const fetchData = useCallback(async () => {
-    if (!isStreaming) return;
+    if (!isStreaming || isSearchActive) return;
 
     setLoading(true);
     setError(null);
@@ -88,28 +94,32 @@ export const useApiData = () => {
       const data = await api.getDashboardData();
       const transformed = transformData(data);
 
-      setTasks(transformed.tasks);
-      setAlerts(transformed.alerts);
-      setMetrics(transformed.metrics);
-      setLoadBalance(transformed.loadBalance);
-      setChartData(transformed.chartData);
-      setSystemHealth(transformed.systemHealth);
+      // 使用状态更新函数来避免闪动
+      setTasks(prevTasks => transformed.tasks);
+      setAlerts(prevAlerts => transformed.alerts);
+      setMetrics(prevMetrics => transformed.metrics);
+      setLoadBalance(prevLoadBalance => transformed.loadBalance);
+      setChartData(prevChartData => transformed.chartData);
+      setSystemHealth(prevSystemHealth => transformed.systemHealth);
+      setServerTags(prevServerTags => transformed.serverTags);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [isStreaming, transformData]);
+  }, [isStreaming, isSearchActive, transformData]);
 
   // 搜索功能
   const handleSearch = useCallback(async (term) => {
     setSearchTerm(term);
 
     if (!term.trim()) {
-      fetchData();
+      setIsSearchActive(false);
       return;
     }
+
+    setIsSearchActive(true);
 
     try {
       const results = await api.searchData(term);
@@ -137,8 +147,9 @@ export const useApiData = () => {
         message: alert.message
       }));
 
-      setTasks(transformedTasks);
-      setAlerts(transformedAlerts);
+      // 使用状态更新函数来避免闪动
+      setTasks(prevTasks => transformedTasks);
+      setAlerts(prevAlerts => transformedAlerts);
     } catch (err) {
       console.error('Search error:', err);
       setError(err.message);
@@ -179,6 +190,7 @@ export const useApiData = () => {
     loadBalance,
     chartData,
     systemHealth,
+    serverTags,
     refreshData
   };
 };

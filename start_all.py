@@ -24,11 +24,11 @@ def start_backend():
 
         # 启动后端服务器
         process = subprocess.Popen([
-            sys.executable, "start_server.py"
+            sys.executable, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"
         ], cwd=backend_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
         # 等待服务器启动
-        time.sleep(5)
+        time.sleep(3)
 
         # 检查进程是否还在运行
         if process.poll() is None:
@@ -108,10 +108,16 @@ def check_dependencies():
 
 def install_frontend_dependencies():
     """安装前端依赖"""
-    print("📦 安装前端依赖...")
+    print("📦 检查前端依赖...")
     frontend_dir = Path(__file__).parent / "frontend"
 
     try:
+        # 检查node_modules是否存在
+        if (frontend_dir / "node_modules").exists():
+            print("✅ 前端依赖已安装，跳过安装")
+            return True
+
+        print("📦 安装前端依赖...")
         result = subprocess.run(["npm", "install"], cwd=frontend_dir, capture_output=True, text=True)
         if result.returncode == 0:
             print("✅ 前端依赖安装成功")
@@ -154,12 +160,14 @@ def main():
     # 安装前端依赖
     if not install_frontend_dependencies():
         print("❌ 前端依赖安装失败")
+        print("💡 请手动运行: cd frontend && npm install")
         sys.exit(1)
 
     # 启动服务器
     backend_process = start_backend()
     if not backend_process:
         print("❌ 后端服务器启动失败")
+        print("💡 请检查后端依赖是否已安装: cd backend && pip install -r requirements.txt")
         sys.exit(1)
 
     frontend_process = start_frontend()
