@@ -86,6 +86,7 @@ class MockDataGenerator:
                 id=f"task-{i+1:03d}",
                 name=template["name"],
                 cluster=random.choice(self.regions),
+                target_cluster=random.choice(self.regions),
                 target_servers=target_servers,
                 status=random.choice([TaskStatus.RUNNING, TaskStatus.COMPLETED, TaskStatus.PENDING]),
                 progress=random.randint(0, 100),
@@ -239,7 +240,7 @@ class MockDataGenerator:
             traffic_distribution=traffic_distribution
         )
 
-    def generate_time_series_data(self, minutes: int = 15) -> List[TimeSeriesData]:
+    def generate_time_series_data(self, minutes: int = 30) -> List[TimeSeriesData]:
         data = []
         end_time = datetime.now()
         start_time = end_time - timedelta(minutes=minutes)

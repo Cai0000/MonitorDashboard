@@ -13,7 +13,7 @@ from pathlib import Path
 
 def start_backend():
     """启动后端服务器"""
-    print("🚀 启动后端服务器...")
+    print("启动后端服务器...")
     backend_dir = Path(__file__).parent / "backend"
 
     try:
@@ -145,11 +145,11 @@ def wait_for_user_input():
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n🛑 正在停止服务器...")
+        print("\n正在停止服务器...")
 
 def main():
     """主函数"""
-    print("🚀 Monitor Dashboard 启动器")
+    print("Monitor Dashboard 启动器")
     print("="*50)
 
     # 检查依赖

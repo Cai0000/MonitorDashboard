@@ -26,6 +26,7 @@ def start_server():
     print("按 Ctrl+C 停止服务器")
 
     try:
+        os.chdir(os.path.dirname(os.path.abspath(__file__)))
         subprocess.run([sys.executable, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"])
     except KeyboardInterrupt:
         print("\n服务器已停止")
@@ -35,9 +36,10 @@ def start_server():
 
 if __name__ == "__main__":
     # 检查是否需要安装依赖
-    if not os.path.exists("requirements.txt"):
+    '''if not os.path.exists("requirements.txt"):
         print("错误: requirements.txt 文件不存在")
         sys.exit(1)
 
-    install_dependencies()
+    install_dependencies()'''
     start_server()
+    # ERROR:    Error loading ASGI app. Could not import module "main".

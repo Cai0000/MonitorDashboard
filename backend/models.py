@@ -48,6 +48,7 @@ class Task(BaseModel):
     id: str
     name: str
     cluster: str
+    target_cluster: Optional[str] = None
     target_servers: List[str]
     status: TaskStatus
     progress: int

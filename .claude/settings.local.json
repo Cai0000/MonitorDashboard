@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(taskkill:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

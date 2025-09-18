@@ -15,6 +15,7 @@ export const useApiData = () => {
   const [chartData, setChartData] = useState([]);
   const [systemHealth, setSystemHealth] = useState({});
   const [serverTags, setServerTags] = useState([]);
+  const [servers, setServers] = useState([]);
 
   // 转换后端数据格式为前端需要的格式
   const transformData = useCallback((data) => {
@@ -25,6 +26,7 @@ export const useApiData = () => {
       id: task.id,
       name: task.name,
       cluster: task.cluster,
+      targetCluster: task.target_cluster,
       status: task.status,
       progress: task.progress,
       startTime: new Date(task.start_time).toLocaleString('zh-CN'),
@@ -72,6 +74,16 @@ export const useApiData = () => {
     // 获取服务器标签
     const uniqueTags = [...new Set(data.servers?.flatMap(server => server.tags) || [])];
 
+    // 转换服务器数据
+    const transformedServers = data.servers?.map(server => ({
+      id: server.id,
+      name: server.name,
+      region: server.region,
+      tags: server.tags,
+      status: server.status,
+      ip_address: server.ip_address
+    })) || [];
+
     return {
       tasks: transformedTasks,
       alerts: transformedAlerts,
@@ -79,7 +91,8 @@ export const useApiData = () => {
       loadBalance: transformedLoadBalance,
       chartData: transformedChartData,
       systemHealth: data.system_health || {},
-      serverTags: uniqueTags
+      serverTags: uniqueTags,
+      servers: transformedServers
     };
   }, []);
 
@@ -102,6 +115,7 @@ export const useApiData = () => {
       setChartData(prevChartData => transformed.chartData);
       setSystemHealth(prevSystemHealth => transformed.systemHealth);
       setServerTags(prevServerTags => transformed.serverTags);
+      setServers(prevServers => transformed.servers);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err.message);
@@ -133,6 +147,7 @@ export const useApiData = () => {
         id: task.id,
         name: task.name,
         cluster: task.cluster,
+        targetCluster: task.target_cluster,
         status: task.status,
         progress: task.progress,
         startTime: new Date(task.start_time).toLocaleString('zh-CN'),
@@ -191,6 +206,7 @@ export const useApiData = () => {
     chartData,
     systemHealth,
     serverTags,
+    servers,
     refreshData
   };
 };

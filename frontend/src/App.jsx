@@ -17,6 +17,7 @@ function App() {
     loadBalance,
     chartData,
     serverTags,
+    servers,
     refreshData,
     loading,
     error
@@ -51,7 +52,7 @@ function App() {
 
         <div className="right-panel">
           <SystemStatus metrics={metrics} loadBalance={loadBalance} serverTags={serverTags} />
-          <DataVisualCenter chartData={chartData} />
+          <DataVisualCenter chartData={chartData} servers={servers} />
         </div>
       </div>
     </div>

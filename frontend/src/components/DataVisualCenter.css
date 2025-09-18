@@ -29,6 +29,29 @@
   font-size: 14px;
   color: var(--text-secondary);
   font-weight: 500;
+  min-width: 60px;
+}
+
+.filter-select {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--secondary-bg);
+  color: var(--text-primary);
+  font-size: 14px;
+  min-width: 150px;
+  transition: all 0.3s ease;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+}
+
+.filter-select option {
+  background-color: var(--secondary-bg);
+  color: var(--text-primary);
 }
 
 .time-range-buttons,

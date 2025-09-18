@@ -1,12 +1,68 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './DataVisualCenter.css';
 
-const DataVisualCenter = ({ chartData = [] }) => {
+const DataVisualCenter = ({ chartData = [], servers = [] }) => {
   const [timeRange, setTimeRange] = useState('5m');
   const [dimension, setDimension] = useState('server');
   const [selectedTime, setSelectedTime] = useState(0);
   const [chartSize, setChartSize] = useState({ width: 600, height: 300 });
+  const [selectedServer, setSelectedServer] = useState('');
+  const [selectedRegion, setSelectedRegion] = useState('');
+  const [selectedTag, setSelectedTag] = useState('');
+  const [historicalData, setHistoricalData] = useState([]);
   const chartRef = useRef(null);
+
+  // 获取所有可用的区域和标签
+  const allRegions = [...new Set(servers.map(s => s.region))];
+  const allTags = [...new Set(servers.flatMap(s => s.tags || []))];
+
+  // 计算时间范围（分钟）
+  const getTimeRangeInMinutes = () => {
+    switch (timeRange) {
+      case '5m': return 5;
+      case '10m': return 10;
+      case '15m': return 15;
+      default: return 5;
+    }
+  };
+
+  // 根据滑块位置计算历史数据
+  useEffect(() => {
+    const timeRangeMinutes = getTimeRangeInMinutes();
+    const now = new Date();
+    const cutoffTime = new Date(now.getTime() - timeRangeMinutes * 60 * 1000);
+
+    // 计算滑块对应的时间点
+    const timeOffset = (selectedTime / 100) * timeRangeMinutes * 60 * 1000;
+    const targetTime = new Date(cutoffTime.getTime() + timeOffset);
+
+    // 过滤出目标时间点附近的数据（前后30秒）
+    const filteredData = chartData.filter(item => {
+      const itemTime = new Date(item.timestamp);
+      const timeDiff = Math.abs(itemTime.getTime() - targetTime.getTime());
+      return timeDiff <= 30000; // 30秒范围内
+    });
+
+    setHistoricalData(filteredData);
+  }, [selectedTime, timeRange, chartData]);
+
+  // 过滤图表数据
+  const filteredChartData = historicalData.filter(item => {
+    if (selectedServer && item.serverId !== selectedServer) return false;
+    if (selectedRegion && item.region !== selectedRegion) return false;
+    if (selectedTag && item.tags && !item.tags.includes(selectedTag)) return false;
+    return true;
+  });
+
+  // 获取当前显示的时间
+  const getCurrentDisplayTime = () => {
+    const timeRangeMinutes = getTimeRangeInMinutes();
+    const now = new Date();
+    const cutoffTime = new Date(now.getTime() - timeRangeMinutes * 60 * 1000);
+    const timeOffset = (selectedTime / 100) * timeRangeMinutes * 60 * 1000;
+    const targetTime = new Date(cutoffTime.getTime() + timeOffset);
+    return targetTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  };
 
   const timeRanges = [
     { label: '5分钟', value: '5m' },
@@ -164,14 +220,29 @@ const DataVisualCenter = ({ chartData = [] }) => {
       );
     }
 
-    const total = data.reduce((sum, d) => sum + d.value, 0);
-    let currentAngle = -Math.PI / 2;
+    // 根据当前历史数据计算饼图数据
+    const pieData = [
+      { label: 'CPU', value: 35, color: 'var(--accent-blue)' },
+      { label: '内存', value: 25, color: 'var(--success-green)' },
+      { label: '磁盘', value: 30, color: 'var(--warning-yellow)' },
+      { label: '网络', value: 10, color: 'var(--error-red)' }
+    ];
 
-    const colors = ['var(--accent-blue)', 'var(--success-green)', 'var(--warning-yellow)', 'var(--error-red)'];
+    // 如果有数据，使用实际数据计算比例
+    if (data.length > 0) {
+      const latestData = data[data.length - 1];
+      pieData[0].value = Math.min(100, Math.max(0, latestData.value || 35));
+      pieData[1].value = Math.min(100, Math.max(0, (latestData.value || 25) * 0.7));
+      pieData[2].value = Math.min(100, Math.max(0, (latestData.value || 30) * 0.8));
+      pieData[3].value = Math.min(100, Math.max(0, 100 - pieData[0].value - pieData[1].value - pieData[2].value));
+    }
+
+    const total = pieData.reduce((sum, d) => sum + d.value, 0);
+    let currentAngle = -Math.PI / 2;
 
     return (
       <svg width={size} height={size} className="pie-chart">
-        {data.map((segment, i) => {
+        {pieData.map((segment, i) => {
           const angle = (segment.value / total) * 2 * Math.PI;
           const endAngle = currentAngle + angle;
 
@@ -195,7 +266,7 @@ const DataVisualCenter = ({ chartData = [] }) => {
             <g key={i}>
               <path
                 d={pathData}
-                fill={colors[i % colors.length]}
+                fill={segment.color}
                 stroke="var(--primary-bg)"
                 strokeWidth="2"
                 className="pie-segment"
@@ -208,7 +279,7 @@ const DataVisualCenter = ({ chartData = [] }) => {
                 textAnchor="middle"
                 fontWeight="bold"
               >
-                {segment.value}%
+                {Math.round(segment.value)}%
               </text>
             </g>
           );
@@ -251,6 +322,54 @@ const DataVisualCenter = ({ chartData = [] }) => {
         </div>
 
         <div className="control-group">
+          <label>服务器:</label>
+          <select
+            value={selectedServer}
+            onChange={(e) => setSelectedServer(e.target.value)}
+            className="filter-select"
+          >
+            <option value="">全部服务器</option>
+            {servers.map(server => (
+              <option key={server.id} value={server.id}>
+                {server.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="control-group">
+          <label>区域:</label>
+          <select
+            value={selectedRegion}
+            onChange={(e) => setSelectedRegion(e.target.value)}
+            className="filter-select"
+          >
+            <option value="">全部区域</option>
+            {allRegions.map(region => (
+              <option key={region} value={region}>
+                {region}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="control-group">
+          <label>标签:</label>
+          <select
+            value={selectedTag}
+            onChange={(e) => setSelectedTag(e.target.value)}
+            className="filter-select"
+          >
+            <option value="">全部标签</option>
+            {allTags.map(tag => (
+              <option key={tag} value={tag}>
+                {tag}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="control-group">
           <label>时间选择:</label>
           <input
             type="range"
@@ -260,7 +379,7 @@ const DataVisualCenter = ({ chartData = [] }) => {
             onChange={(e) => setSelectedTime(parseInt(e.target.value))}
             className="time-slider"
           />
-          <span className="time-display">{selectedTime}%</span>
+          <span className="time-display">{getCurrentDisplayTime()}</span>
         </div>
       </div>
 
@@ -268,19 +387,14 @@ const DataVisualCenter = ({ chartData = [] }) => {
         <div className="chart-section">
           <h3>时间趋势</h3>
           <div className="chart-wrapper">
-            {renderLineChart(chartData)}
+            {renderLineChart(filteredChartData)}
           </div>
         </div>
 
         <div className="chart-section">
           <h3>设备状态</h3>
           <div className="chart-wrapper">
-            {renderPieChart([
-              { label: 'CPU', value: 35 },
-              { label: '内存', value: 25 },
-              { label: '磁盘', value: 30 },
-              { label: '网络', value: 10 }
-            ])}
+            {renderPieChart(filteredChartData)}
           </div>
         </div>
 

@@ -27,7 +27,7 @@ async def background_data_updater():
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 应用启动时执行
     # 初始化时间序列数据
-    data_generator.time_series_data = data_generator.generate_time_series_data(minutes=15)
+    data_generator.time_series_data = data_generator.generate_time_series_data(minutes=30)
 
     # 启动后台数据更新任务
     asyncio.create_task(background_data_updater())
@@ -183,7 +183,7 @@ async def get_load_balance():
 async def get_time_series_data(
     metric_type: Optional[str] = Query(None, description="指标类型: cpu_usage, memory_usage, disk_usage, network_traffic"),
     region: Optional[str] = Query(None, description="按区域筛选"),
-    minutes: int = Query(15, description="时间范围（分钟）")
+    minutes: int = Query(30, description="时间范围（分钟）")
 ):
     """获取时间序列数据"""
     try:
@@ -271,6 +271,7 @@ async def search_data(
             for task in data_generator.tasks:
                 if (query in task.name.lower() or
                     query in task.cluster.lower() or
+                    (task.target_cluster and query in task.target_cluster.lower()) or
                     query in task.description.lower()):
                     results["tasks"].append(task.dict())
 
@@ -288,4 +289,7 @@ async def search_data(
 # 例如在命令行运行: uvicorn main:app --reload --host 0.0.0.0 --port 8000
 if __name__ == "__main__":
     import uvicorn
+    import os
+    # 改变当前工作目录到 backend 目录，确保能正确导入模块
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

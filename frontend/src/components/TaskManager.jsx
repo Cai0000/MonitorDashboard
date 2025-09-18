@@ -69,6 +69,7 @@ const TaskManager = ({ tasks = [], alerts = [] }) => {
                 </span>
               </div>
               <div className="task-cluster">{task.cluster}</div>
+              <div className="task-target-cluster">目标集群: {task.targetCluster || '无'}</div>
               <div className="task-progress">
                 <div className="progress-bar">
                   <div
