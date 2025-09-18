@@ -3,11 +3,22 @@ import './Header.css';
 
 const Header = ({ onSearch, onToggleStream, onRefresh, isStreaming }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSearchActive, setIsSearchActive] = useState(false);
 
-  const handleSearch = (e) => {
+  const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchTerm(value);
-    onSearch?.(value);
+  };
+
+  const handleSearchSubmit = () => {
+    setIsSearchActive(true);
+    onSearch?.(searchTerm);
+  };
+
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setIsSearchActive(false);
+    onSearch?.('');
   };
 
   return (
@@ -19,9 +30,24 @@ const Header = ({ onSearch, onToggleStream, onRefresh, isStreaming }) => {
             type="text"
             placeholder="搜索服务器、标签或区域..."
             value={searchTerm}
-            onChange={handleSearch}
+            onChange={handleSearchChange}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearchSubmit()}
             className="search-input"
           />
+          {searchTerm && (
+            <button
+              onClick={handleClearSearch}
+              className="search-clear-btn"
+            >
+              ×
+            </button>
+          )}
+          <button
+            onClick={handleSearchSubmit}
+            className="search-btn"
+          >
+            🔍
+          </button>
         </div>
       </div>
 

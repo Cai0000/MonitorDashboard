@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './TaskManager.css';
 
 const TaskManager = ({ tasks = [], alerts = [] }) => {
   const [selectedTask, setSelectedTask] = useState(null);
+  const detailRef = useRef(null);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -32,6 +33,20 @@ const TaskManager = ({ tasks = [], alerts = [] }) => {
       default: return 'var(--text-secondary)';
     }
   };
+
+  // 点击外部关闭弹窗
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (detailRef.current && !detailRef.current.contains(event.target)) {
+        setSelectedTask(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   return (
     <div className="task-manager">
@@ -93,7 +108,7 @@ const TaskManager = ({ tasks = [], alerts = [] }) => {
       </div>
 
       {selectedTask && (
-        <div className="task-detail">
+        <div className="task-detail" ref={detailRef}>
           <h3>任务详情</h3>
           <div className="detail-grid">
             <div className="detail-item">

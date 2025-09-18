@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './DataVisualCenter.css';
 
 const DataVisualCenter = ({ chartData = [] }) => {
   const [timeRange, setTimeRange] = useState('5m');
   const [dimension, setDimension] = useState('server');
   const [selectedTime, setSelectedTime] = useState(0);
+  const [chartSize, setChartSize] = useState({ width: 600, height: 300 });
+  const chartRef = useRef(null);
 
   const timeRanges = [
     { label: '5分钟', value: '5m' },
@@ -18,9 +20,24 @@ const DataVisualCenter = ({ chartData = [] }) => {
     { label: '服务', value: 'service' }
   ];
 
+  // 响应式调整图表大小
+  useEffect(() => {
+    const updateChartSize = () => {
+      if (chartRef.current) {
+        const containerWidth = chartRef.current.offsetWidth;
+        const newWidth = Math.max(400, Math.min(containerWidth - 40, 800));
+        const newHeight = Math.max(200, Math.min(newWidth * 0.5, 400));
+        setChartSize({ width: newWidth, height: newHeight });
+      }
+    };
+
+    updateChartSize();
+    window.addEventListener('resize', updateChartSize);
+    return () => window.removeEventListener('resize', updateChartSize);
+  }, []);
+
   const renderLineChart = (data) => {
-    const width = 600;
-    const height = 300;
+    const { width, height } = chartSize;
     const padding = 40;
     const chartWidth = width - 2 * padding;
     const chartHeight = height - 2 * padding;
@@ -201,7 +218,7 @@ const DataVisualCenter = ({ chartData = [] }) => {
   };
 
   return (
-    <div className="data-visual-center">
+    <div className="data-visual-center" ref={chartRef}>
       <div className="visual-controls">
         <div className="control-group">
           <label>时间范围:</label>

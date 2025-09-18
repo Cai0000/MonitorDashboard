@@ -43,12 +43,20 @@ app = FastAPI(title="Monitor Dashboard API", version="1.0.0", lifespan=lifespan)
 # 添加CORS中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:4173"],  # 允许前端来源
+    allow_origins=["http://localhost:5173", "http://localhost:4173", "http://localhost:5147"],  # 允许前端来源
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+'''app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 允许所有来源
+    allow_credentials=True,
+    allow_methods=["*"],   # 允许所有方法
+    allow_headers=["*"],   # 允许所有头部
+    expose_headers=["*"],  # 暴露所有头部
+)
+'''
 @app.get("/")
 async def root():
     return {"message": "Monitor Dashboard API is running", "timestamp": datetime.now()}
