@@ -81,9 +81,8 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
   const [hoveredSegment, setHoveredSegment] = useState(null); // 用于饼图悬停效果
   const [selectedMetric, setSelectedMetric] = useState('cpu_usage'); // 新增：选择指标类型
   
-  // Create circular buffer for time series data (15 minutes of data at 2s intervals = 450 data points)
-  const dataBufferRef = useRef(new CircularBuffer(450));
-  const [localChartData, setLocalChartData] = useState([]);
+  // Create circular buffers for each server's time series data
+  const serverBuffersRef = useRef({});
   
   const chartRef = useRef(null);
 
@@ -105,16 +104,36 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
   const allRegions = [...new Set(servers.map(s => s.region))];
   const allTags = [...new Set(servers.map(s => s.serviceType).filter(Boolean))];
 
-  // Update buffer with new data
+  // Initialize buffers for all servers
+  useEffect(() => {
+    if (servers && servers.length > 0) {
+      // Create a buffer for each server if it doesn't exist
+      servers.forEach(server => {
+        if (!serverBuffersRef.current[server.id]) {
+          // Create circular buffer for time series data (15 minutes of data at 30s intervals = 30 data points)
+          serverBuffersRef.current[server.id] = {
+            buffer: new CircularBuffer(30),
+            serverInfo: {
+              id: server.id,
+              name: server.name,
+              region: server.region,
+              serviceType: server.serviceType
+            }
+          };
+        }
+      });
+    }
+  }, [servers]);
+
+  // Update buffers with new data
   useEffect(() => {
     if (chartData && chartData.length > 0) {
-      // Add new data points to buffer
+      // Add new data points to respective server buffers
       chartData.forEach(point => {
-        dataBufferRef.current.add(point);
+        if (serverBuffersRef.current[point.serverId]) {
+          serverBuffersRef.current[point.serverId].buffer.add(point);
+        }
       });
-      
-      // Update local chart data state
-      setLocalChartData(dataBufferRef.current.getAll());
     }
   }, [chartData]);
 
@@ -137,8 +156,12 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
     const timeOffset = ((100 - selectedTime) / 100) * timeRangeMinutes * 60 * 1000;
     const targetTime = new Date(now.getTime() - timeOffset);
 
-    // 获取缓冲区中的所有数据
-    const allData = dataBufferRef.current.getAll();
+    // Collect data from all server buffers
+    const allData = [];
+    Object.values(serverBuffersRef.current).forEach(serverBuffer => {
+      const serverData = serverBuffer.buffer.getAll();
+      allData.push(...serverData);
+    });
 
     // 过滤出目标时间点附近的数据（前后30秒）
     const filteredData = allData.filter(item => {

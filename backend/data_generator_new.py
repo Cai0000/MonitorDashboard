@@ -13,7 +13,7 @@ class MockDataGenerator:
     def __init__(self):
         # 配置 - 基于新的数据结构
         self.CLUSTERS_COUNT = 3
-        self.SERVERS_PER_CLUSTER = 5
+        self.SERVERS_PER_CLUSTER = 2
 
         # 模拟 faker 的数据生成
         self.regions = ["香港", "贵州", "新加坡", "广州", "北京", "上海", "深圳", "杭州"]
