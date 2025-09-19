@@ -192,7 +192,11 @@ async def get_time_series_data(
         data = data_generator.time_series_data
 
         # 按时间范围筛选
-        cutoff_time = datetime.now() - timedelta(minutes=minutes)
+        cutoff_time = datetime.now()
+        # 确保cutoff_time是naive datetime（无时区信息）
+        if cutoff_time.tzinfo is not None:
+            cutoff_time = cutoff_time.replace(tzinfo=None)
+        cutoff_time = cutoff_time - timedelta(minutes=minutes)
         data = [d for d in data if d.timestamp >= cutoff_time]
 
         # 按 after 参数筛选
@@ -208,6 +212,12 @@ async def get_time_series_data(
                 else:
                     # Try to parse as a general date string
                     after_time = datetime.fromisoformat(after)
+                
+                # 确保after_time是naive datetime（无时区信息）
+                if after_time.tzinfo is not None:
+                    # 如果有时区信息，转换为UTC然后移除时区信息
+                    after_time = after_time.utctimetuple()
+                    after_time = datetime(*after_time[:6])
                 
                 # Filter data after the specified time
                 data = [d for d in data if d.timestamp >= after_time]
