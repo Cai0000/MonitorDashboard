@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 
 export const useApiData = () => {
   const [isStreaming, setIsStreaming] = useState(true);
+
+  // Track the latest timestamp for incremental updates
+  const lastTimestampRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -127,6 +130,29 @@ export const useApiData = () => {
     };
   }, []);
 
+  // 获取增量时间序列数据
+  const fetchIncrementalTimeSeries = useCallback(async () => {
+    if (!lastTimestampRef.current) return null;
+
+    try {
+      const incrementalData = await api.getTimeSeriesData({
+        after: lastTimestampRef.current.toISOString(),
+        minutes: 5 // 获取最近5分钟的数据
+      });
+
+      if (incrementalData && incrementalData.length > 0) {
+        // 更新最新时间戳
+        const latestTimestamp = new Date(Math.max(...incrementalData.map(item => new Date(item.timestamp))));
+        lastTimestampRef.current = latestTimestamp;
+
+        return incrementalData;
+      }
+    } catch (err) {
+      console.error('Error fetching incremental time series data:', err);
+    }
+    return null;
+  }, []);
+
   // 获取数据
   const fetchData = useCallback(async () => {
     if (!isStreaming) return;
@@ -135,30 +161,84 @@ export const useApiData = () => {
     setError(null);
 
     try {
-      const data = await api.getDashboardData();
-      const transformed = transformData(data);
+      // 首次获取完整数据
+      if (!lastTimestampRef.current) {
+        const data = await api.getDashboardData();
+        const transformed = transformData(data);
 
-      // 当搜索激活时，不更新任务列表，保持搜索结果
-      if (!isSearchActive) {
-        setTasks(prevTasks => transformed.tasks);
+        // 设置最新时间戳
+        if (transformed.chartData && transformed.chartData.length > 0) {
+          const latestTimestamp = new Date(Math.max(...transformed.chartData.map(item => new Date(item.timestamp))));
+          lastTimestampRef.current = latestTimestamp;
+        }
+
+        // 当搜索激活时，不更新任务列表，保持搜索结果
+        if (!isSearchActive) {
+          setTasks(prevTasks => transformed.tasks);
+        }
+
+        setAlerts(prevAlerts => transformed.alerts);
+        setMetrics(prevMetrics => transformed.metrics);
+        setLoadBalance(prevLoadBalance => transformed.loadBalance);
+        setChartData(prevChartData => transformed.chartData);
+        setSystemHealth(prevSystemHealth => transformed.systemHealth);
+        setServerTags(prevServerTags => transformed.serverTags);
+        setServers(prevServers => transformed.servers);
+        setClusters(prevClusters => transformed.clusters);
+        setGroupedData(prevGroupedData => transformed.groupedData);
+      } else {
+        // 增量更新：只获取时间序列数据
+        const incrementalData = await fetchIncrementalTimeSeries();
+        if (incrementalData) {
+          // 转换增量数据
+          const transformedIncremental = incrementalData.map(item => ({
+            timestamp: item.timestamp,
+            time: new Date(item.timestamp).toLocaleTimeString('zh-CN', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit'
+            }),
+            value: Math.round(item.value),
+            metric_type: item.metric_type,
+            serverId: item.server_id,
+            region: item.region,
+            tags: item.service_type ? [item.service_type] : []
+          }));
+
+          // 将增量数据添加到现有图表数据中
+          setChartData(prevChartData => {
+            const combined = [...prevChartData, ...transformedIncremental];
+            // 按时间排序并去重
+            const unique = Array.from(new Map(combined.map(item => [item.timestamp, item])).values());
+            return unique.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          });
+        }
+
+        // 其他数据继续完整获取（为了简化，也可以后续优化为增量）
+        const data = await api.getDashboardData();
+        const transformed = transformData(data);
+
+        // 当搜索激活时，不更新任务列表，保持搜索结果
+        if (!isSearchActive) {
+          setTasks(prevTasks => transformed.tasks);
+        }
+
+        setAlerts(prevAlerts => transformed.alerts);
+        setMetrics(prevMetrics => transformed.metrics);
+        setLoadBalance(prevLoadBalance => transformed.loadBalance);
+        setSystemHealth(prevSystemHealth => transformed.systemHealth);
+        setServerTags(prevServerTags => transformed.serverTags);
+        setServers(prevServers => transformed.servers);
+        setClusters(prevClusters => transformed.clusters);
+        setGroupedData(prevGroupedData => transformed.groupedData);
       }
-      
-      setAlerts(prevAlerts => transformed.alerts);
-      setMetrics(prevMetrics => transformed.metrics);
-      setLoadBalance(prevLoadBalance => transformed.loadBalance);
-      setChartData(prevChartData => transformed.chartData);
-      setSystemHealth(prevSystemHealth => transformed.systemHealth);
-      setServerTags(prevServerTags => transformed.serverTags);
-      setServers(prevServers => transformed.servers);
-      setClusters(prevClusters => transformed.clusters);
-      setGroupedData(prevGroupedData => transformed.groupedData);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [isStreaming, isSearchActive, transformData]);
+  }, [isStreaming, isSearchActive, transformData, fetchIncrementalTimeSeries]);
 
   // 搜索功能
   const handleSearch = useCallback(async (term) => {

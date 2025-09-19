@@ -184,7 +184,8 @@ async def get_time_series_data(
     metric_type: Optional[str] = Query(None, description="指标类型: cpu_usage, memory_usage, disk_usage, network_traffic"),
     region: Optional[str] = Query(None, description="按区域筛选"),
     server_id: Optional[str] = Query(None, description="按服务器ID筛选"),
-    minutes: int = Query(30, description="时间范围（分钟）")
+    minutes: int = Query(30, description="时间范围（分钟）"),
+    after: Optional[str] = Query(None, description="只返回此时间之后的数据，ISO格式")
 ):
     """获取时间序列数据"""
     try:
@@ -193,6 +194,15 @@ async def get_time_series_data(
         # 按时间范围筛选
         cutoff_time = datetime.now() - timedelta(minutes=minutes)
         data = [d for d in data if d.timestamp >= cutoff_time]
+
+        # 按 after 参数筛选
+        if after:
+            try:
+                after_time = datetime.fromisoformat(after.replace('Z', '+00:00'))
+                data = [d for d in data if d.timestamp >= after_time]
+            except ValueError:
+                # 如果时间格式不正确，忽略 after 参数
+                pass
 
         # 按指标类型筛选
         if metric_type:

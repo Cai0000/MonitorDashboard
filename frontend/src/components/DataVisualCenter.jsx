@@ -83,7 +83,10 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
   
   // Create circular buffers for each server's time series data
   const serverBuffersRef = useRef({});
-  
+
+  // Track the latest timestamp for incremental updates
+  const lastTsRef = useRef(null);
+
   const chartRef = useRef(null);
 
   // 指标类型选项
@@ -163,11 +166,14 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
       allData.push(...serverData);
     });
 
-    // 过滤出目标时间点附近的数据（前后30秒）
+    // 创建时间窗口：从目标时间往前5分钟到目标时间，确保显示足够的数据点
+    const windowStart = new Date(targetTime.getTime() - 2 * 60 * 1000); // 5分钟前
+    const windowEnd = targetTime;
+
+    // 过滤在时间窗口内的数据
     const filteredData = allData.filter(item => {
       const itemTime = new Date(item.timestamp);
-      const timeDiff = Math.abs(itemTime.getTime() - targetTime.getTime());
-      return timeDiff <= 30000; // 30秒范围内
+      return itemTime >= windowStart && itemTime <= windowEnd;
     });
 
     return filteredData;
