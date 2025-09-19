@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './TaskManager.css';
 
-const TaskManager = ({ tasks = [], alerts = [], clusters = [] }) => {
+const TaskManager = ({ tasks = [], alerts = [], clusters = [], servers = [] }) => {
   const [selectedTask, setSelectedTask] = useState(null);
+  const [selectedCluster, setSelectedCluster] = useState(null);
   const detailRef = useRef(null);
+  const clusterDetailRef = useRef(null);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -40,6 +42,9 @@ const TaskManager = ({ tasks = [], alerts = [], clusters = [] }) => {
       if (detailRef.current && !detailRef.current.contains(event.target)) {
         setSelectedTask(null);
       }
+      if (clusterDetailRef.current && !clusterDetailRef.current.contains(event.target)) {
+        setSelectedCluster(null);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -55,10 +60,13 @@ const TaskManager = ({ tasks = [], alerts = [], clusters = [] }) => {
         <h2>集群信息</h2>
         <div className="cluster-list">
           {clusters.map((cluster) => (
-            <div key={cluster.id} className="cluster-item">
+            <div
+              key={cluster.id}
+              className={`cluster-item ${selectedCluster?.id === cluster.id ? 'selected' : ''}`}
+              onClick={() => setSelectedCluster(cluster)}
+            >
               <div className="cluster-header">
                 <span className="cluster-name">{cluster.name}</span>
-                <span className="cluster-region">{cluster.region}</span>
               </div>
               <div className="cluster-details">
                 <div className="cluster-service-type">服务类型: {cluster.serviceType}</div>
@@ -169,6 +177,37 @@ const TaskManager = ({ tasks = [], alerts = [], clusters = [] }) => {
             <div className="detail-item full-width">
               <label>任务描述:</label>
               <span>{selectedTask.description || '无描述'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedCluster && (
+        <div className="cluster-detail" ref={clusterDetailRef}>
+          <h3>集群详情</h3>
+          <div className="detail-grid">
+            <div className="detail-item">
+              <label>集群名称:</label>
+              <span>{selectedCluster.name}</span>
+            </div>
+            <div className="detail-item">
+              <label>服务类型:</label>
+              <span>{selectedCluster.serviceType}</span>
+            </div>
+            <div className="detail-item">
+              <label>服务器数量:</label>
+              <span>{selectedCluster.servers?.length || 0}</span>
+            </div>
+            <div className="detail-item full-width">
+              <label>服务器列表:</label>
+              <div className="server-list">
+                {selectedCluster.servers?.map((server) => (
+                  <div key={server.id} className="server-item">
+                    <span className="server-name">{server.name}</span>
+                    <span className="server-region">{server.region}</span>
+                  </div>
+                )) || '无服务器数据'}
+              </div>
             </div>
           </div>
         </div>

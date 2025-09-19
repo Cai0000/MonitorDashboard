@@ -50,7 +50,7 @@ function App() {
       )}
 
       <div className="main-content">
-        <TaskManager tasks={tasks} alerts={alerts} clusters={clusters} />
+        <TaskManager tasks={tasks} alerts={alerts} clusters={clusters} servers={servers} />
 
         <div className="right-panel">
           <SystemStatus metrics={metrics} loadBalance={loadBalance} serverTags={serverTags} />

@@ -22,8 +22,9 @@
 /* 集群信息样式 */
 .cluster-section {
   flex-shrink: 0;
-  max-height: 30%;
+  height: 220px;
   border-bottom: 1px solid var(--border-color);
+  overflow: hidden;
 }
 
 .cluster-list {
@@ -88,10 +89,22 @@
   border: 1px solid rgba(0, 212, 255, 0.2);
 }
 
+.cluster-item.selected {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+}
+
+.cluster-item:hover {
+  border-color: var(--accent-blue);
+  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.1);
+  cursor: pointer;
+}
+
 .task-list-section {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 250px;
   max-height: 35%;
 }
 
@@ -236,7 +249,7 @@
 
 .task-detail {
   position: fixed;
-  left: 320px;
+  left: 650px;
   top: 80px;
   width: 280px;
   background-color: var(--secondary-bg);
@@ -244,7 +257,7 @@
   border-radius: 8px;
   padding: 16px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  z-index: 100;
+  z-index: 99;
 }
 
 .task-detail h3 {
@@ -282,6 +295,60 @@
 
 .detail-item.full-width span {
   line-height: 1.4;
+}
+
+.cluster-detail {
+  position: fixed;
+  left: 320px;
+  top: 80px;
+  width: 320px;
+  background-color: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 101;
+}
+
+.cluster-detail h3 {
+  margin: 0 0 12px 0;
+  color: var(--accent-blue);
+  font-size: 1.1rem;
+}
+
+.server-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--primary-bg);
+  padding: 8px;
+}
+
+.server-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+}
+
+.server-item:last-child {
+  border-bottom: none;
+}
+
+.server-name {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.server-region {
+  color: var(--text-secondary);
+  font-size: 11px;
+  background-color: var(--secondary-bg);
+  padding: 2px 6px;
+  border-radius: 3px;
 }
 
 /* 自定义滚动条样式 */

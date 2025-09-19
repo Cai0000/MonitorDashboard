@@ -16,7 +16,7 @@ class MockDataGenerator:
         self.SERVERS_PER_CLUSTER = 5
 
         # 模拟 faker 的数据生成
-        self.regions = ["US", "CN", "JP", "GB", "DE", "FR", "KR", "SG"]
+        self.regions = ["香港", "贵州", "新加坡", "广州", "北京", "上海", "深圳", "杭州"]
         self.service_types = ["web", "db", "cache", "message_queue", "file_storage", "api_gateway"]
         self.adjectives = ["secure", "fast", "reliable", "scalable", "efficient", "robust", "dynamic", "static"]
         self.nouns = ["system", "network", "database", "cache", "server", "cluster", "node", "endpoint"]
@@ -82,7 +82,7 @@ class MockDataGenerator:
                 servers.append({
                     "serverId": server_id,
                     "serverName": self._generate_server_name(),
-                    "region": cluster["region"],
+                    "region": random.choice(self.regions),  # 服务器可以位于不同地域
                     "tags": [random.choice(self.verbs), random.choice(self.adjectives)],
                     "serviceType": cluster["serviceType"],
                     "clusterId": cluster["clusterId"],

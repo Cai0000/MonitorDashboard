@@ -62,6 +62,21 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
     setHistoricalData(filteredData);
   }, [selectedTime, timeRange, chartData]);
 
+  // 根据时间选择过滤任务
+  const getFilteredTasks = () => {
+    const timeRangeMinutes = getTimeRangeInMinutes();
+    const now = new Date();
+    const timeOffset = ((100 - selectedTime) / 100) * timeRangeMinutes * 60 * 1000;
+    const targetTime = new Date(now.getTime() - timeOffset);
+
+    // 过滤在目标时间点创建或正在运行的任务
+    return tasks.filter(task => {
+      const taskCreatedTime = task.createdAt || task.startTimeTimestamp;
+      const timeDiff = Math.abs(taskCreatedTime - targetTime.getTime());
+      return timeDiff <= timeRangeMinutes * 60 * 1000; // 在时间范围内的任务
+    });
+  };
+
   // 过滤图表数据
   const filteredChartData = historicalData.filter(item => {
     if (selectedMetric && item.metric_type !== selectedMetric) return false;
@@ -77,7 +92,7 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
     const now = new Date();
     const timeOffset = ((100 - selectedTime) / 100) * timeRangeMinutes * 60 * 1000;
     const targetTime = new Date(now.getTime() - timeOffset);
-    return targetTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return targetTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
   };
 
   const timeRanges = [
@@ -125,10 +140,9 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
     // 修复：确保数据有正确的时间格式
     const processedData = data.map(item => ({
       ...item,
-      time: new Date(item.timestamp).toLocaleTimeString('zh-CN', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        second: '2-digit'
+      time: new Date(item.timestamp).toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit'
       }),
       value: item.value !== undefined ? item.value : 0
     })).filter(item => !isNaN(item.value)); // 过滤掉无效值
@@ -495,11 +509,23 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
     // 按区域统计任务数量
     const regionTaskCounts = {};
     tasks.forEach(task => {
-      const cluster = task.cluster || 'unknown';
-      if (regionTaskCounts[cluster]) {
-        regionTaskCounts[cluster]++;
+      // 首先通过targetCluster找到对应的服务器，然后获取服务器所属地域
+      const targetCluster = task.targetCluster;
+      let region = 'unknown';
+
+      if (targetCluster) {
+        // 查找该集群下的服务器，获取服务器所属地域
+        const clusterServers = servers.filter(server => server.clusterId === targetCluster);
+        if (clusterServers.length > 0) {
+          // 取第一个服务器的地域作为任务的地域
+          region = clusterServers[0].region;
+        }
+      }
+
+      if (regionTaskCounts[region]) {
+        regionTaskCounts[region]++;
       } else {
-        regionTaskCounts[cluster] = 1;
+        regionTaskCounts[region] = 1;
       }
     });
 
@@ -622,7 +648,7 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
   };
 
   // 计算任务统计数据（用于原始状态网格显示）
-  const calculateTaskStats = () => {
+  const calculateTaskStats = (tasksToCount = tasks) => {
     const stats = {
       pending: 0,
       running: 0,
@@ -630,11 +656,11 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
       failed: 0
     };
 
-    if (!Array.isArray(tasks)) {
+    if (!Array.isArray(tasksToCount)) {
       return stats;
     }
 
-    tasks.forEach(task => {
+    tasksToCount.forEach(task => {
       switch (task.status) {
         case 'pending':
           stats.pending++;
@@ -714,7 +740,8 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
   };
 
   const serverStats = calculateServerStats();
-  const taskStats = calculateTaskStats(); // 用于原始状态网格显示
+  const filteredTasks = getFilteredTasks();
+  const taskStats = calculateTaskStats(filteredTasks); // 用于原始状态网格显示
 
   return (
     <div className="data-visual-center" ref={chartRef}>
@@ -827,7 +854,7 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
             className="time-slider"
           />
           <div className="time-labels">
-            <span>15分钟前</span>
+            <span>过去</span>
             <span className="current-time">{getCurrentDisplayTime()}</span>
             <span>现在</span>
           </div>
@@ -846,14 +873,14 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
           <div className="chart-subsection">
             <h3>任务状态分布</h3>
             <div className="chart-wrapper">
-              {renderPieChart(tasks)}
+              {renderPieChart(getFilteredTasks())}
             </div>
           </div>
 
           <div className="chart-subsection">
             <h3>各区域任务数量</h3>
             <div className="chart-wrapper">
-              {renderRegionTaskChart(tasks)}
+              {renderRegionTaskChart(getFilteredTasks())}
             </div>
           </div>
         </div>

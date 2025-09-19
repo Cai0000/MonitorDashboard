@@ -33,7 +33,11 @@ export const useApiData = () => {
       progress: task.progress,
       startTime: new Date(task.startTime).toLocaleString('zh-CN'),
       estimatedEnd: new Date(task.estimatedEndTime).toLocaleString('zh-CN'),
-      description: task.description
+      description: task.description,
+      // 添加原始时间戳用于时间过滤
+      startTimeTimestamp: new Date(task.startTime).getTime(),
+      estimatedEndTimeTimestamp: new Date(task.estimatedEndTime).getTime(),
+      createdAt: task.createdAt || new Date().getTime()
     })) || [];
 
     // 转换告警数据
