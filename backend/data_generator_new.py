@@ -107,6 +107,7 @@ class MockDataGenerator:
         return {
             "taskId": f"task-{int(time.time() * 1000)}",
             "taskName": random.choice(self.phrases),
+            "cluster": random.choice(self.clusters)["clusterId"],
             "targetCluster": random.choice(self.clusters)["clusterId"],
             "status": random.choice(["queued", "running", "failed", "completed"]),
             "progress": random.randint(0, 100),
@@ -260,7 +261,7 @@ class MockDataGenerator:
         return LoadBalanceStatus(
             is_balanced=ratio < 3.0,
             ratio=round(ratio, 2),
-            server_count=len(network_data),
+            server_count=len(network_data),  # 修复：确保返回正确的服务器数量
             traffic_distribution=traffic_distribution
         )
 

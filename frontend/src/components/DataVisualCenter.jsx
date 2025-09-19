@@ -873,14 +873,16 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
           <div className="chart-subsection">
             <h3>任务状态分布</h3>
             <div className="chart-wrapper">
-              {renderPieChart(getFilteredTasks())}
+              {/* 任务状态分布使用所有任务，不根据时间过滤 */}
+              {renderPieChart(tasks)}
             </div>
           </div>
 
           <div className="chart-subsection">
             <h3>各区域任务数量</h3>
             <div className="chart-wrapper">
-              {renderRegionTaskChart(getFilteredTasks())}
+              {/* 各区域任务数量使用所有任务，不根据时间过滤 */}
+              {renderRegionTaskChart(tasks)}
             </div>
           </div>
         </div>
