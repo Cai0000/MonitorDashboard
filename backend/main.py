@@ -198,10 +198,22 @@ async def get_time_series_data(
         # 按 after 参数筛选
         if after:
             try:
-                after_time = datetime.fromisoformat(after.replace('Z', '+00:00'))
+                # 更健壮的时间解析逻辑
+                if 'T' in after and ('Z' in after or '+' in after or after.count('-') > 2):
+                    # ISO format with timezone
+                    if after.endswith('Z'):
+                        after_time = datetime.fromisoformat(after.replace('Z', '+00:00'))
+                    else:
+                        after_time = datetime.fromisoformat(after)
+                else:
+                    # Try to parse as a general date string
+                    after_time = datetime.fromisoformat(after)
+                
+                # Filter data after the specified time
                 data = [d for d in data if d.timestamp >= after_time]
-            except ValueError:
-                # 如果时间格式不正确，忽略 after 参数
+            except (ValueError, TypeError) as e:
+                # 如果时间格式不正确，记录日志并忽略 after 参数
+                print(f"Warning: 时间解析错误，忽略after参数: {e}")
                 pass
 
         # 按指标类型筛选
@@ -218,6 +230,9 @@ async def get_time_series_data(
 
         return [item.dict() for item in data]
     except Exception as e:
+        print(f"获取时间序列数据时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()  # 打印详细的错误堆栈
         raise HTTPException(status_code=500, detail=f"获取时间序列数据时出错: {str(e)}")
 
 @app.get("/api/stats")
