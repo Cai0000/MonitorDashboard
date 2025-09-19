@@ -1,6 +1,6 @@
 import './SystemStatus.css';
 
-const SystemStatus = ({ metrics = {}, loadBalance = {}, serverTags = [] }) => {
+const SystemStatus = ({ metrics = {}, loadBalance = {}, serverTags = [], servers = [] }) => {
   const getHealthColor = (health) => {
     switch (health) {
       case 'good': return 'var(--success-green)';
@@ -169,19 +169,8 @@ const SystemStatus = ({ metrics = {}, loadBalance = {}, serverTags = [] }) => {
           </div>
           <div className="balance-item">
             <span className="balance-label">服务器数量:</span>
-            <span className="balance-value">{loadBalance.serverCount}</span>
+            <span className="balance-value">{servers.length || loadBalance.serverCount || 0}</span>
           </div>
-        </div>
-      </div>
-
-      <div className="server-tags-section">
-        <h3>服务器标签</h3>
-        <div className="tags-container">
-          {serverTags.map((tag, index) => (
-            <span key={index} className="server-tag">
-              {tag}
-            </span>
-          ))}
         </div>
       </div>
     </div>

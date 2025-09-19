@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './TaskManager.css';
 
-const TaskManager = ({ tasks = [], alerts = [] }) => {
+const TaskManager = ({ tasks = [], alerts = [], clusters = [] }) => {
   const [selectedTask, setSelectedTask] = useState(null);
   const detailRef = useRef(null);
 
@@ -50,6 +50,30 @@ const TaskManager = ({ tasks = [], alerts = [] }) => {
 
   return (
     <div className="task-manager">
+      {/* 集群信息部分 */}
+      <div className="cluster-section">
+        <h2>集群信息</h2>
+        <div className="cluster-list">
+          {clusters.map((cluster) => (
+            <div key={cluster.id} className="cluster-item">
+              <div className="cluster-header">
+                <span className="cluster-name">{cluster.name}</span>
+                <span className="cluster-region">{cluster.region}</span>
+              </div>
+              <div className="cluster-details">
+                <div className="cluster-service-type">服务类型: {cluster.serviceType}</div>
+                <div className="cluster-server-count">服务器数量: {cluster.servers?.length || 0}</div>
+              </div>
+              <div className="cluster-tags">
+                {cluster.tags?.map((tag, index) => (
+                  <span key={index} className="cluster-tag">{tag}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="task-list-section">
         <h2>任务列表</h2>
         <div className="task-list">
@@ -101,8 +125,12 @@ const TaskManager = ({ tasks = [], alerts = [] }) => {
                   {alert.severity === 'high' ? '🔴' : alert.severity === 'medium' ? '🟡' : '🟢'}
                 </span>
               </div>
-              <div className="alert-source">{alert.source}</div>
+              <div className="alert-source">来源: {alert.source}</div>
+              <div className="alert-server">服务器: {alert.serverId}</div>
               <div className="alert-message">{alert.message}</div>
+              {alert.resolved && (
+                <div className="alert-resolved">✓ 已解决</div>
+              )}
             </div>
           ))}
         </div>
@@ -137,6 +165,10 @@ const TaskManager = ({ tasks = [], alerts = [] }) => {
             <div className="detail-item">
               <label>预计结束时间:</label>
               <span>{selectedTask.estimatedEnd}</span>
+            </div>
+            <div className="detail-item full-width">
+              <label>任务描述:</label>
+              <span>{selectedTask.description || '无描述'}</span>
             </div>
           </div>
         </div>

@@ -1,20 +1,36 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './DataVisualCenter.css';
 
-const DataVisualCenter = ({ chartData = [], servers = [] }) => {
+const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, tasks = [] }) => {
   const [timeRange, setTimeRange] = useState('5m');
   const [dimension, setDimension] = useState('server');
-  const [selectedTime, setSelectedTime] = useState(0);
+  const [selectedTime, setSelectedTime] = useState(100); // 默认显示最新数据
   const [chartSize, setChartSize] = useState({ width: 600, height: 300 });
   const [selectedServer, setSelectedServer] = useState('');
   const [selectedRegion, setSelectedRegion] = useState('');
   const [selectedTag, setSelectedTag] = useState('');
   const [historicalData, setHistoricalData] = useState([]);
+  const [hoveredSegment, setHoveredSegment] = useState(null); // 用于饼图悬停效果
+  const [selectedMetric, setSelectedMetric] = useState('cpu_usage'); // 新增：选择指标类型
   const chartRef = useRef(null);
 
-  // 获取所有可用的区域和标签
+  // 指标类型选项
+  const metricTypes = [
+    { value: 'cpu_usage', label: 'CPU 使用率 (%)' },
+    { value: 'memory_usage', label: '内存使用率 (%)' }
+    /*
+    { value: 'disk_io', label: '磁盘 I/O (MB/s)' },
+    { value: 'network_in', label: '网络流入 (KB/s)' },
+    { value: 'network_out', label: '网络流出 (KB/s)' },
+    { value: 'load_1m', label: '平均负载 (1m)' },
+    { value: 'load_5m', label: '平均负载 (5m)' },
+    { value: 'load_15m', label: '平均负载 (15m)' }
+     */
+  ];
+
+  // 获取所有可用的区域和服务类型
   const allRegions = [...new Set(servers.map(s => s.region))];
-  const allTags = [...new Set(servers.flatMap(s => s.tags || []))];
+  const allTags = [...new Set(servers.map(s => s.serviceType).filter(Boolean))];
 
   // 计算时间范围（分钟）
   const getTimeRangeInMinutes = () => {
@@ -32,9 +48,9 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
     const now = new Date();
     const cutoffTime = new Date(now.getTime() - timeRangeMinutes * 60 * 1000);
 
-    // 计算滑块对应的时间点
-    const timeOffset = (selectedTime / 100) * timeRangeMinutes * 60 * 1000;
-    const targetTime = new Date(cutoffTime.getTime() + timeOffset);
+    // 计算滑块对应的时间点（100表示最新，0表示最旧）
+    const timeOffset = ((100 - selectedTime) / 100) * timeRangeMinutes * 60 * 1000;
+    const targetTime = new Date(now.getTime() - timeOffset);
 
     // 过滤出目标时间点附近的数据（前后30秒）
     const filteredData = chartData.filter(item => {
@@ -48,9 +64,10 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
 
   // 过滤图表数据
   const filteredChartData = historicalData.filter(item => {
+    if (selectedMetric && item.metric_type !== selectedMetric) return false;
     if (selectedServer && item.serverId !== selectedServer) return false;
     if (selectedRegion && item.region !== selectedRegion) return false;
-    if (selectedTag && item.tags && !item.tags.includes(selectedTag)) return false;
+    if (selectedTag && item.service_type !== selectedTag) return false;
     return true;
   });
 
@@ -58,10 +75,9 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
   const getCurrentDisplayTime = () => {
     const timeRangeMinutes = getTimeRangeInMinutes();
     const now = new Date();
-    const cutoffTime = new Date(now.getTime() - timeRangeMinutes * 60 * 1000);
-    const timeOffset = (selectedTime / 100) * timeRangeMinutes * 60 * 1000;
-    const targetTime = new Date(cutoffTime.getTime() + timeOffset);
-    return targetTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    const timeOffset = ((100 - selectedTime) / 100) * timeRangeMinutes * 60 * 1000;
+    const targetTime = new Date(now.getTime() - timeOffset);
+    return targetTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
   const timeRanges = [
@@ -94,7 +110,7 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
 
   const renderLineChart = (data) => {
     const { width, height } = chartSize;
-    const padding = 40;
+    const padding = 60; // 增加左边距以适应Y轴标签
     const chartWidth = width - 2 * padding;
     const chartHeight = height - 2 * padding;
 
@@ -106,22 +122,70 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
       );
     }
 
-    const maxValue = Math.max(...data.map(d => d.value));
-    const minValue = Math.min(...data.map(d => d.value));
+    // 修复：确保数据有正确的时间格式
+    const processedData = data.map(item => ({
+      ...item,
+      time: new Date(item.timestamp).toLocaleTimeString('zh-CN', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit'
+      }),
+      value: item.value !== undefined ? item.value : 0
+    })).filter(item => !isNaN(item.value)); // 过滤掉无效值
+
+    if (processedData.length === 0) {
+      return (
+        <div className="chart-placeholder">
+          <p>暂无有效数据</p>
+        </div>
+      );
+    }
+
+    const maxValue = Math.max(...processedData.map(d => d.value), 1);
+    const minValue = Math.min(...processedData.map(d => d.value), 0);
     const range = maxValue - minValue || 1;
 
-    const points = data.map((d, i) => ({
-      x: padding + (i / (data.length - 1)) * chartWidth,
-      y: padding + chartHeight - ((d.value - minValue) / range) * chartHeight
-    }));
+    // 按时间排序数据
+    processedData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    
+    // 按服务器分组数据
+    const groupedByServer = {};
+    processedData.forEach(item => {
+      if (!groupedByServer[item.serverId]) {
+        groupedByServer[item.serverId] = [];
+      }
+      groupedByServer[item.serverId].push(item);
+    });
+
+    // 为每个服务器生成颜色
+    const serverColors = {};
+    const serverIds = Object.keys(groupedByServer);
+    const colors = [
+      'var(--accent-blue)', 
+      'var(--success-green)', 
+      'var(--warning-yellow)', 
+      'var(--error-red)',
+      '#ff6b6b',
+      '#4ecdc4',
+      '#45b7d1',
+      '#96ceb4',
+      '#feca57',
+      '#ff9ff3'
+    ];
+    
+    serverIds.forEach((serverId, index) => {
+      serverColors[serverId] = colors[index % colors.length];
+    });
 
     return (
       <svg width={width} height={height} className="line-chart">
         <defs>
-          <linearGradient id="lineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style={{ stopColor: 'var(--accent-blue)', stopOpacity: 0.8 }} />
-            <stop offset="100%" style={{ stopColor: 'var(--accent-blue)', stopOpacity: 0.1 }} />
-          </linearGradient>
+          {serverIds.map((serverId, index) => (
+            <linearGradient key={serverId} id={`lineGradient-${serverId}`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" style={{ stopColor: serverColors[serverId], stopOpacity: 0.8 }} />
+              <stop offset="100%" style={{ stopColor: serverColors[serverId], stopOpacity: 0.1 }} />
+            </linearGradient>
+          ))}
         </defs>
 
         <g className="grid">
@@ -152,33 +216,47 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
           })}
         </g>
 
-        <path
-          d={`M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`}
-          fill="none"
-          stroke="var(--accent-blue)"
-          strokeWidth="2"
-        />
+        {/* 绘制每条线 */}
+        {Object.entries(groupedByServer).map(([serverId, serverData]) => {
+          const points = serverData.map((d, i) => ({
+            x: padding + (i / (serverData.length - 1)) * chartWidth,
+            y: padding + chartHeight - ((d.value - minValue) / range) * chartHeight,
+            data: d
+          }));
 
-        <path
-          d={`M ${points.map(p => `${p.x},${p.y}`).join(' L ')} L ${points[points.length - 1].x},${height - padding} L ${points[0].x},${height - padding} Z`}
-          fill="url(#lineGradient)"
-          opacity="0.3"
-        />
+          return (
+            <g key={serverId}>
+              <path
+                d={`M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`}
+                fill="none"
+                stroke={serverColors[serverId]}
+                strokeWidth="2"
+              />
 
-        {points.map((point, i) => (
-          <circle
-            key={i}
-            cx={point.x}
-            cy={point.y}
-            r="3"
-            fill="var(--accent-blue)"
-            className="data-point"
-          />
-        ))}
+              <path
+                d={`M ${points.map(p => `${p.x},${p.y}`).join(' L ')} L ${points[points.length - 1].x},${height - padding} L ${points[0].x},${height - padding} Z`}
+                fill={`url(#lineGradient-${serverId})`}
+                opacity="0.3"
+              />
+
+              {points.map((point, i) => (
+                <circle
+                  key={i}
+                  cx={point.x}
+                  cy={point.y}
+                  r="3"
+                  fill={serverColors[serverId]}
+                  className="data-point"
+                />
+              ))}
+            </g>
+          );
+        })}
 
         <g className="x-axis">
-          {data.map((d, i) => {
-            const x = padding + (i / (data.length - 1)) * chartWidth;
+          {processedData.filter((_, i) => i % Math.ceil(processedData.length / 5) === 0).map((d, i) => {
+            const index = processedData.findIndex(item => item.timestamp === d.timestamp);
+            const x = padding + (index / (processedData.length - 1)) * chartWidth;
             return (
               <g key={i}>
                 <line
@@ -202,17 +280,69 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
             );
           })}
         </g>
+        
+        {/* 添加时间范围标注 
+        <text
+          x={padding}
+          y={20}
+          fill="var(--text-primary)"
+          fontSize="12"
+          fontWeight="bold"
+        >
+          时间范围: 1分钟数据
+        </text>
+        */}
+        
+        {/* 添加指标类型标注 */}
+        <text
+          x={width - padding}
+          y={20}
+          fill="var(--text-primary)"
+          fontSize="12"
+          fontWeight="bold"
+          textAnchor="end"
+        >
+          {metricTypes.find(m => m.value === selectedMetric)?.label || '未知指标'}
+        </text>
+        
+        {/* 添加图例 */}
+        <g transform={`translate(${padding}, ${height - 25})`}>
+          {serverIds.slice(0, 5).map((serverId, index) => {
+            const server = servers.find(s => s.id === serverId);
+            const serverName = server ? server.name : serverId;
+            return (
+              <g key={serverId} transform={`translate(${index * 120}, 0)`}>
+                <line 
+                  x1="0" 
+                  y1="0" 
+                  x2="20" 
+                  y2="0" 
+                  stroke={serverColors[serverId]} 
+                  strokeWidth="2" 
+                />
+                <text 
+                  x="25" 
+                  y="4" 
+                  fill="var(--text-primary)" 
+                  fontSize="10"
+                >
+                  {serverName.length > 15 ? serverName.substring(0, 15) + '...' : serverName}
+                </text>
+              </g>
+            );
+          })}
+        </g>
       </svg>
     );
   };
 
-  const renderPieChart = (data) => {
+  const renderPieChart = (tasks) => {
     const size = 200;
     const centerX = size / 2;
     const centerY = size / 2;
     const radius = size / 2 - 20;
 
-    if (!data || data.length === 0) {
+    if (!tasks || tasks.length === 0) {
       return (
         <div className="chart-placeholder">
           <p>暂无数据</p>
@@ -220,29 +350,59 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
       );
     }
 
-    // 根据当前历史数据计算饼图数据
-    const pieData = [
-      { label: 'CPU', value: 35, color: 'var(--accent-blue)' },
-      { label: '内存', value: 25, color: 'var(--success-green)' },
-      { label: '磁盘', value: 30, color: 'var(--warning-yellow)' },
-      { label: '网络', value: 10, color: 'var(--error-red)' }
-    ];
+    // 计算各状态任务数量
+    const statusCounts = {
+      pending: 0,
+      running: 0,
+      completed: 0,
+      failed: 0
+    };
 
-    // 如果有数据，使用实际数据计算比例
-    if (data.length > 0) {
-      const latestData = data[data.length - 1];
-      pieData[0].value = Math.min(100, Math.max(0, latestData.value || 35));
-      pieData[1].value = Math.min(100, Math.max(0, (latestData.value || 25) * 0.7));
-      pieData[2].value = Math.min(100, Math.max(0, (latestData.value || 30) * 0.8));
-      pieData[3].value = Math.min(100, Math.max(0, 100 - pieData[0].value - pieData[1].value - pieData[2].value));
+    tasks.forEach(task => {
+      switch (task.status) {
+        case 'pending':
+          statusCounts.pending++;
+          break;
+        case 'running':
+          statusCounts.running++;
+          break;
+        case 'completed':
+          statusCounts.completed++;
+          break;
+        case 'failed':
+          statusCounts.failed++;
+          break;
+        default:
+          break;
+      }
+    });
+
+    const total = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
+    
+    if (total === 0) {
+      return (
+        <div className="chart-placeholder">
+          <p>暂无任务数据</p>
+        </div>
+      );
     }
 
-    const total = pieData.reduce((sum, d) => sum + d.value, 0);
+    // 根据任务状态计算饼图数据
+    const pieData = [
+      { label: '排队中', value: statusCounts.pending, color: 'var(--warning-yellow)' },
+      { label: '运行中', value: statusCounts.running, color: 'var(--accent-blue)' },
+      { label: '已完成', value: statusCounts.completed, color: 'var(--success-green)' },
+      { label: '已失败', value: statusCounts.failed, color: 'var(--error-red)' }
+    ];
+
     let currentAngle = -Math.PI / 2;
 
     return (
       <svg width={size} height={size} className="pie-chart">
         {pieData.map((segment, i) => {
+          // 如果值为0，跳过绘制
+          if (segment.value === 0) return null;
+          
           const angle = (segment.value / total) * 2 * Math.PI;
           const endAngle = currentAngle + angle;
 
@@ -263,13 +423,18 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
           currentAngle = endAngle;
 
           return (
-            <g key={i}>
+            <g 
+              key={i}
+              onMouseEnter={() => setHoveredSegment(i)}
+              onMouseLeave={() => setHoveredSegment(null)}
+            >
               <path
                 d={pathData}
                 fill={segment.color}
                 stroke="var(--primary-bg)"
                 strokeWidth="2"
                 className="pie-segment"
+                opacity={hoveredSegment === null || hoveredSegment === i ? 1 : 0.7}
               />
               <text
                 x={centerX + (radius * 0.7) * Math.cos(currentAngle - angle / 2)}
@@ -279,18 +444,282 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
                 textAnchor="middle"
                 fontWeight="bold"
               >
-                {Math.round(segment.value)}%
+                {segment.value > 0 ? `${Math.round((segment.value/total)*100)}%` : ''}
               </text>
             </g>
           );
         })}
+        
+        {/* 添加悬停信息显示 */}
+        {hoveredSegment !== null && (
+          <g>
+            <rect 
+              x={centerX - 60} 
+              y={centerY - 25} 
+              width={120} 
+              height={30} 
+              fill="var(--secondary-bg)" 
+              stroke="var(--border-color)"
+              rx="5"
+            />
+            <text 
+              x={centerX} 
+              y={centerY - 5} 
+              fill="var(--text-primary)" 
+              fontSize="14" 
+              textAnchor="middle"
+              fontWeight="bold"
+            >
+              {pieData[hoveredSegment].label}: {pieData[hoveredSegment].value} ({Math.round((pieData[hoveredSegment].value/total)*100)}%)
+            </text>
+          </g>
+        )}
       </svg>
     );
   };
 
+  // 计算各区域任务数量并渲染柱状图
+  const renderRegionTaskChart = (tasks) => {
+    const chartWidth = 300;
+    const chartHeight = 200;
+    const padding = 40;
+
+    if (!tasks || tasks.length === 0) {
+      return (
+        <div className="chart-placeholder">
+          <p>暂无任务数据</p>
+        </div>
+      );
+    }
+
+    // 按区域统计任务数量
+    const regionTaskCounts = {};
+    tasks.forEach(task => {
+      const cluster = task.cluster || 'unknown';
+      if (regionTaskCounts[cluster]) {
+        regionTaskCounts[cluster]++;
+      } else {
+        regionTaskCounts[cluster] = 1;
+      }
+    });
+
+    const regions = Object.keys(regionTaskCounts);
+    const maxCount = Math.max(...Object.values(regionTaskCounts), 1);
+    
+    if (regions.length === 0) {
+      return (
+        <div className="chart-placeholder">
+          <p>暂无区域数据</p>
+        </div>
+      );
+    }
+
+    // 柱状图颜色
+    const colors = [
+      'var(--accent-blue)',
+      'var(--success-green)',
+      'var(--warning-yellow)',
+      'var(--error-red)',
+      '#ff6b6b',
+      '#4ecdc4',
+      '#45b7d1',
+      '#96ceb4',
+      '#feca57',
+      '#ff9ff3'
+    ];
+
+    return (
+      <svg width={chartWidth} height={chartHeight} className="bar-chart">
+        {/* Y轴网格线和标签 */}
+        <g className="grid">
+          {[0, 25, 50, 75, 100].map((percent) => {
+            const y = padding + ((100 - percent) / 100) * (chartHeight - 2 * padding);
+            const value = Math.round((percent / 100) * maxCount);
+            return (
+              <g key={percent}>
+                <line
+                  x1={padding}
+                  y1={y}
+                  x2={chartWidth - padding}
+                  y2={y}
+                  stroke="var(--border-color)"
+                  strokeWidth="1"
+                />
+                <text
+                  x={padding - 10}
+                  y={y + 4}
+                  fill="var(--text-secondary)"
+                  fontSize="10"
+                  textAnchor="end"
+                >
+                  {value}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+
+        {/* 柱状图 */}
+        <g>
+          {regions.map((region, index) => {
+            const barWidth = (chartWidth - 2 * padding) / regions.length * 0.8;
+            const barHeight = (regionTaskCounts[region] / maxCount) * (chartHeight - 2 * padding);
+            const x = padding + (index * (chartWidth - 2 * padding) / regions.length) + ((chartWidth - 2 * padding) / regions.length * 0.1);
+            const y = chartHeight - padding - barHeight;
+
+            return (
+              <g key={region}>
+                <rect
+                  x={x}
+                  y={y}
+                  width={barWidth}
+                  height={barHeight}
+                  fill={colors[index % colors.length]}
+                  rx="2"
+                />
+                <text
+                  x={x + barWidth / 2}
+                  y={y - 5}
+                  fill="var(--text-primary)"
+                  fontSize="10"
+                  textAnchor="middle"
+                >
+                  {regionTaskCounts[region]}
+                </text>
+                <text
+                  x={x + barWidth / 2}
+                  y={chartHeight - padding + 15}
+                  fill="var(--text-secondary)"
+                  fontSize="10"
+                  textAnchor="middle"
+                >
+                  {region.length > 8 ? region.substring(0, 8) + '...' : region}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+
+        {/* X轴和Y轴 */}
+        <line
+          x1={padding}
+          y1={chartHeight - padding}
+          x2={chartWidth - padding}
+          y2={chartHeight - padding}
+          stroke="var(--text-secondary)"
+          strokeWidth="1"
+        />
+        <line
+          x1={padding}
+          y1={padding}
+          x2={padding}
+          y2={chartHeight - padding}
+          stroke="var(--text-secondary)"
+          strokeWidth="1"
+        />
+      </svg>
+    );
+  };
+
+  // 计算任务统计数据（用于原始状态网格显示）
+  const calculateTaskStats = () => {
+    const stats = {
+      pending: 0,
+      running: 0,
+      completed: 0,
+      failed: 0
+    };
+
+    if (!Array.isArray(tasks)) {
+      return stats;
+    }
+
+    tasks.forEach(task => {
+      switch (task.status) {
+        case 'pending':
+          stats.pending++;
+          break;
+        case 'running':
+          stats.running++;
+          break;
+        case 'completed':
+          stats.completed++;
+          break;
+        case 'failed':
+          stats.failed++;
+          break;
+        default:
+          break;
+      }
+    });
+
+    return stats;
+  };
+
+  // 计算服务器状态统计数据
+  const calculateServerStats = () => {
+    console.log('Grouped data:', groupedData);
+
+    // 优先使用分组数据的整体统计
+    if (groupedData?.overall) {
+      console.log('Using grouped data overall stats:', groupedData.overall);
+      return groupedData.overall;
+    }
+
+    // 回退到原来的计算方法
+    const stats = {
+      healthy: 0,
+      warning: 0,
+      danger: 0,
+      offline: 0
+    };
+
+    console.log('Servers data:', servers);
+    console.log('Selected filters:', { selectedServer, selectedRegion, selectedTag });
+
+    // 根据筛选条件过滤服务器
+    const filteredServers = servers.filter(server => {
+      if (selectedServer && server.id !== selectedServer) return false;
+      if (selectedRegion && server.region !== selectedRegion) return false;
+      if (selectedTag && server.tags && !server.tags.includes(selectedTag)) return false;
+      return true;
+    });
+
+    console.log('Filtered servers:', filteredServers);
+
+    // 统计各状态服务器数量
+    filteredServers.forEach(server => {
+      console.log('Server status:', server.status);
+      switch (server.status) {
+        case 'healthy':
+          stats.healthy++;
+          break;
+        case 'warning':
+          stats.warning++;
+          break;
+        case 'danger':
+          stats.danger++;
+          break;
+        case 'offline':
+          stats.offline++;
+          break;
+        default:
+          console.log('Unknown status:', server.status);
+          break;
+      }
+    });
+
+    console.log('Final stats:', stats);
+    return stats;
+  };
+
+  const serverStats = calculateServerStats();
+  const taskStats = calculateTaskStats(); // 用于原始状态网格显示
+
   return (
     <div className="data-visual-center" ref={chartRef}>
       <div className="visual-controls">
+        {/* 时间范围选择 
         <div className="control-group">
           <label>时间范围:</label>
           <div className="time-range-buttons">
@@ -305,7 +734,24 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
             ))}
           </div>
         </div>
+         */}
 
+        <div className="control-group">
+          <label>指标类型:</label>
+          <select
+            value={selectedMetric}
+            onChange={(e) => setSelectedMetric(e.target.value)}
+            className="filter-select"
+          >
+            {metricTypes.map(metric => (
+              <option key={metric.value} value={metric.value}>
+                {metric.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 
         <div className="control-group">
           <label>维度:</label>
           <div className="dimension-buttons">
@@ -320,7 +766,8 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
             ))}
           </div>
         </div>
-
+        */}
+        
         <div className="control-group">
           <label>服务器:</label>
           <select
@@ -354,13 +801,13 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
         </div>
 
         <div className="control-group">
-          <label>标签:</label>
+          <label>服务类型:</label>
           <select
             value={selectedTag}
             onChange={(e) => setSelectedTag(e.target.value)}
             className="filter-select"
           >
-            <option value="">全部标签</option>
+            <option value="">全部服务类型</option>
             {allTags.map(tag => (
               <option key={tag} value={tag}>
                 {tag}
@@ -379,47 +826,34 @@ const DataVisualCenter = ({ chartData = [], servers = [] }) => {
             onChange={(e) => setSelectedTime(parseInt(e.target.value))}
             className="time-slider"
           />
-          <span className="time-display">{getCurrentDisplayTime()}</span>
+          <div className="time-labels">
+            <span>15分钟前</span>
+            <span className="current-time">{getCurrentDisplayTime()}</span>
+            <span>现在</span>
+          </div>
         </div>
       </div>
 
       <div className="charts-container">
-        <div className="chart-section">
+        <div className="chart-section main-chart">
           <h3>时间趋势</h3>
           <div className="chart-wrapper">
             {renderLineChart(filteredChartData)}
           </div>
         </div>
 
-        <div className="chart-section">
-          <h3>设备状态</h3>
-          <div className="chart-wrapper">
-            {renderPieChart(filteredChartData)}
+        <div className="chart-section secondary-charts">
+          <div className="chart-subsection">
+            <h3>任务状态分布</h3>
+            <div className="chart-wrapper">
+              {renderPieChart(tasks)}
+            </div>
           </div>
-        </div>
 
-        <div className="chart-section">
-          <h3>设备状态</h3>
-          <div className="status-grid">
-            <div className="status-card healthy">
-              <div className="status-icon">🟢</div>
-              <div className="status-count">12</div>
-              <div className="status-label">正常</div>
-            </div>
-            <div className="status-card warning">
-              <div className="status-icon">🟡</div>
-              <div className="status-count">3</div>
-              <div className="status-label">警告</div>
-            </div>
-            <div className="status-card danger">
-              <div className="status-icon">🔴</div>
-              <div className="status-count">1</div>
-              <div className="status-label">危险</div>
-            </div>
-            <div className="status-card offline">
-              <div className="status-icon">⚫</div>
-              <div className="status-count">2</div>
-              <div className="status-label">离线</div>
+          <div className="chart-subsection">
+            <h3>各区域任务数量</h3>
+            <div className="chart-wrapper">
+              {renderRegionTaskChart(tasks)}
             </div>
           </div>
         </div>

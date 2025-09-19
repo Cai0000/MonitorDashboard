@@ -18,9 +18,11 @@ function App() {
     chartData,
     serverTags,
     servers,
+    clusters,
     refreshData,
     loading,
-    error
+    error,
+    groupedData
   } = useApiData();
 
   return (
@@ -48,11 +50,16 @@ function App() {
       )}
 
       <div className="main-content">
-        <TaskManager tasks={tasks} alerts={alerts} />
+        <TaskManager tasks={tasks} alerts={alerts} clusters={clusters} />
 
         <div className="right-panel">
           <SystemStatus metrics={metrics} loadBalance={loadBalance} serverTags={serverTags} />
-          <DataVisualCenter chartData={chartData} servers={servers} />
+          <DataVisualCenter 
+            chartData={chartData} 
+            servers={servers} 
+            groupedData={groupedData}
+            tasks={tasks}
+          />
         </div>
       </div>
     </div>

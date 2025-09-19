@@ -6,7 +6,7 @@ import asyncio
 import json
 from datetime import datetime, timedelta
 from models import *
-from data_generator import MockDataGenerator
+from data_generator_new import MockDataGenerator
 from contextlib import asynccontextmanager
 
 # 初始化数据生成器
@@ -27,7 +27,7 @@ async def background_data_updater():
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 应用启动时执行
     # 初始化时间序列数据
-    data_generator.time_series_data = data_generator.generate_time_series_data(minutes=30)
+    data_generator.time_series_data = data_generator._generate_time_series_data(minutes=30)
 
     # 启动后台数据更新任务
     asyncio.create_task(background_data_updater())
@@ -183,6 +183,7 @@ async def get_load_balance():
 async def get_time_series_data(
     metric_type: Optional[str] = Query(None, description="指标类型: cpu_usage, memory_usage, disk_usage, network_traffic"),
     region: Optional[str] = Query(None, description="按区域筛选"),
+    server_id: Optional[str] = Query(None, description="按服务器ID筛选"),
     minutes: int = Query(30, description="时间范围（分钟）")
 ):
     """获取时间序列数据"""
@@ -200,6 +201,10 @@ async def get_time_series_data(
         # 按区域筛选
         if region:
             data = [d for d in data if d.region == region]
+            
+        # 按服务器ID筛选
+        if server_id:
+            data = [d for d in data if d.server_id == server_id]
 
         return [item.dict() for item in data]
     except Exception as e:

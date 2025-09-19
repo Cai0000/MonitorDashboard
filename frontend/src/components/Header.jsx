@@ -28,7 +28,7 @@ const Header = ({ onSearch, onToggleStream, onRefresh, isStreaming }) => {
         <div className="search-container">
           <input
             type="text"
-            placeholder="搜索服务器、标签或区域..."
+            placeholder="搜索服务器、服务类型、区域或标签..."
             value={searchTerm}
             onChange={handleSearchChange}
             onKeyPress={(e) => e.key === 'Enter' && handleSearchSubmit()}

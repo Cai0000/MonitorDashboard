@@ -16,6 +16,8 @@ export const useApiData = () => {
   const [systemHealth, setSystemHealth] = useState({});
   const [serverTags, setServerTags] = useState([]);
   const [servers, setServers] = useState([]);
+  const [clusters, setClusters] = useState([]);
+  const [groupedData, setGroupedData] = useState({});
 
   // 转换后端数据格式为前端需要的格式
   const transformData = useCallback((data) => {
@@ -23,23 +25,26 @@ export const useApiData = () => {
 
     // 转换任务数据
     const transformedTasks = data.tasks?.map(task => ({
-      id: task.id,
-      name: task.name,
+      id: task.taskId,
+      name: task.taskName,
       cluster: task.cluster,
-      targetCluster: task.target_cluster,
+      targetCluster: task.targetCluster,
       status: task.status,
       progress: task.progress,
-      startTime: new Date(task.start_time).toLocaleString('zh-CN'),
-      estimatedEnd: new Date(task.estimated_end_time).toLocaleString('zh-CN')
+      startTime: new Date(task.startTime).toLocaleString('zh-CN'),
+      estimatedEnd: new Date(task.estimatedEndTime).toLocaleString('zh-CN'),
+      description: task.description
     })) || [];
 
     // 转换告警数据
     const transformedAlerts = data.alerts?.map(alert => ({
-      id: alert.id,
+      id: alert.alarmId,
       time: new Date(alert.timestamp).toLocaleTimeString('zh-CN'),
-      source: alert.server_id,
+      source: alert.source,
+      serverId: alert.serverId,
       severity: alert.severity,
-      message: alert.message
+      message: alert.message,
+      resolved: alert.resolved
     })) || [];
 
     // 转换指标数据 - 使用第一个服务器的指标作为系统指标
@@ -64,24 +69,44 @@ export const useApiData = () => {
     };
 
     // 转换时间序列数据
-    const transformedChartData = data.time_series
-      ?.filter(item => item.metric_type === 'cpu_usage')
-      .map(item => ({
-        time: new Date(item.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-        value: Math.round(item.value)
-      })) || [];
+    const transformedChartData = data.time_series?.map(item => ({
+      timestamp: item.timestamp,
+      time: new Date(item.timestamp).toLocaleTimeString('zh-CN', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit'
+      }),
+      value: Math.round(item.value),
+      metric_type: item.metric_type,
+      serverId: item.server_id,
+      region: item.region,
+      tags: item.service_type ? [item.service_type] : []
+    })) || [];
 
     // 获取服务器标签
     const uniqueTags = [...new Set(data.servers?.flatMap(server => server.tags) || [])];
 
     // 转换服务器数据
     const transformedServers = data.servers?.map(server => ({
-      id: server.id,
-      name: server.name,
+      id: server.serverId,
+      name: server.serverName,
       region: server.region,
-      tags: server.tags,
+      tags: [server.serviceType, ...server.tags],
       status: server.status,
-      ip_address: server.ip_address
+      serviceType: server.serviceType,
+      clusterId: server.clusterId,
+      ip_address: server.ipAddress
+    })) || [];
+
+    // 转换集群数据
+    const transformedClusters = data.clusters?.map(cluster => ({
+      id: cluster.clusterId,
+      name: cluster.clusterName,
+      region: cluster.region,
+      tags: cluster.tags,
+      serviceType: cluster.serviceType,
+      serverIds: cluster.serverIds,
+      servers: transformedServers.filter(server => cluster.serverIds.includes(server.id))
     })) || [];
 
     return {
@@ -92,13 +117,15 @@ export const useApiData = () => {
       chartData: transformedChartData,
       systemHealth: data.system_health || {},
       serverTags: uniqueTags,
-      servers: transformedServers
+      servers: transformedServers,
+      clusters: transformedClusters,
+      groupedData: data.grouped_data || {}
     };
   }, []);
 
   // 获取数据
   const fetchData = useCallback(async () => {
-    if (!isStreaming || isSearchActive) return;
+    if (!isStreaming) return;
 
     setLoading(true);
     setError(null);
@@ -107,8 +134,11 @@ export const useApiData = () => {
       const data = await api.getDashboardData();
       const transformed = transformData(data);
 
-      // 使用状态更新函数来避免闪动
-      setTasks(prevTasks => transformed.tasks);
+      // 当搜索激活时，不更新任务列表，保持搜索结果
+      if (!isSearchActive) {
+        setTasks(prevTasks => transformed.tasks);
+      }
+      
       setAlerts(prevAlerts => transformed.alerts);
       setMetrics(prevMetrics => transformed.metrics);
       setLoadBalance(prevLoadBalance => transformed.loadBalance);
@@ -116,6 +146,8 @@ export const useApiData = () => {
       setSystemHealth(prevSystemHealth => transformed.systemHealth);
       setServerTags(prevServerTags => transformed.serverTags);
       setServers(prevServers => transformed.servers);
+      setClusters(prevClusters => transformed.clusters);
+      setGroupedData(prevGroupedData => transformed.groupedData);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err.message);
@@ -138,12 +170,8 @@ export const useApiData = () => {
     try {
       const results = await api.searchData(term);
 
-      // 合并搜索结果
-      const allTasks = results.tasks || [];
-      const allAlerts = results.alerts || [];
-
       // 转换搜索结果
-      const transformedTasks = allTasks.map(task => ({
+      const transformedTasks = results.tasks?.map(task => ({
         id: task.id,
         name: task.name,
         cluster: task.cluster,
@@ -152,17 +180,19 @@ export const useApiData = () => {
         progress: task.progress,
         startTime: new Date(task.start_time).toLocaleString('zh-CN'),
         estimatedEnd: new Date(task.estimated_end_time).toLocaleString('zh-CN')
-      }));
+      })) || [];
 
-      const transformedAlerts = allAlerts.map(alert => ({
+      const transformedAlerts = results.alerts?.map(alert => ({
         id: alert.id,
         time: new Date(alert.timestamp).toLocaleTimeString('zh-CN'),
-        source: alert.server_id,
+        source: alert.source,
+        serverId: alert.server_id,
         severity: alert.severity,
-        message: alert.message
-      }));
+        message: alert.message,
+        resolved: alert.resolved
+      })) || [];
 
-      // 使用状态更新函数来避免闪动
+      // 更新搜索结果
       setTasks(prevTasks => transformedTasks);
       setAlerts(prevAlerts => transformedAlerts);
     } catch (err) {
@@ -190,7 +220,7 @@ export const useApiData = () => {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [isStreaming, fetchData]);
+  }, [isStreaming, isSearchActive, fetchData]);
 
   return {
     isStreaming,
@@ -207,6 +237,8 @@ export const useApiData = () => {
     systemHealth,
     serverTags,
     servers,
-    refreshData
+    clusters,
+    refreshData,
+    groupedData
   };
 };
