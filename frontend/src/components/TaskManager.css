@@ -352,23 +352,27 @@
 }
 
 /* 自定义滚动条样式 */
+.cluster-list::-webkit-scrollbar,
 .task-list::-webkit-scrollbar,
 .alerts-list::-webkit-scrollbar {
   width: 6px;
 }
 
+.cluster-list::-webkit-scrollbar-track,
 .task-list::-webkit-scrollbar-track,
 .alerts-list::-webkit-scrollbar-track {
   background: var(--primary-bg);
   border-radius: 3px;
 }
 
+.cluster-list::-webkit-scrollbar-thumb,
 .task-list::-webkit-scrollbar-thumb,
 .alerts-list::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 3px;
 }
 
+.cluster-list::-webkit-scrollbar-thumb:hover,
 .task-list::-webkit-scrollbar-thumb:hover,
 .alerts-list::-webkit-scrollbar-thumb:hover {
   background: var(--accent-blue);

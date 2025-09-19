@@ -396,11 +396,12 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
 
           return (
             <g key={serverId}>
-              {/* 填充区域 */}
+              {/* 填充区域 
               <path
                 d={areaPath}
                 fill={`url(#lineGradient-${serverId})`}
               />
+              */}
               
               {/* 折线 */}
               <path
@@ -604,15 +605,7 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
         {/* 添加悬停信息显示 */}
         {hoveredSegment !== null && (
           <g>
-            <rect 
-              x={centerX - 60} 
-              y={centerY - 25} 
-              width={120} 
-              height={30} 
-              fill="var(--secondary-bg)" 
-              stroke="var(--border-color)"
-              rx="5"
-            />
+            {/* 删除白色方框背景 */}
             <text 
               x={centerX} 
               y={centerY - 5} 
@@ -991,7 +984,7 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
             className="time-slider"
           />
           <div className="time-labels">
-            <span>过去</span>
+            <span>15分钟前</span>
             <span className="current-time">{getCurrentDisplayTime()}</span>
             <span>现在</span>
           </div>
