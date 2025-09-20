@@ -8,8 +8,18 @@ import subprocess
 import sys
 import os
 import time
-import threading
+import platform
+import shutil
 from pathlib import Path
+
+
+def get_npm_command():
+    """根据平台返回 npm 命令"""
+    if platform.system() == "Windows":
+        return shutil.which("npm.cmd") or "npm.cmd"
+    else:
+        return shutil.which("npm") or "npm"
+
 
 def start_backend():
     """启动后端服务器"""
@@ -24,8 +34,8 @@ def start_backend():
 
         # 启动后端服务器
         process = subprocess.Popen([
-            sys.executable, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"
-        ], cwd=backend_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000", "--reload"
+        ], cwd=backend_dir)
 
         # 等待服务器启动
         time.sleep(3)
@@ -33,8 +43,8 @@ def start_backend():
         # 检查进程是否还在运行
         if process.poll() is None:
             print("✅ 后端服务器启动成功")
-            print("📍 后端地址: http://localhost:8000")
-            print("📚 API文档: http://localhost:8000/docs")
+            print("📍 后端地址: http://127.0.0.1:8000")
+            print("📚 API文档: http://127.0.0.1:8000/docs")
             return process
         else:
             print("❌ 后端服务器启动失败")
@@ -44,10 +54,12 @@ def start_backend():
         print(f"❌ 启动后端服务器时出错: {e}")
         return None
 
+
 def start_frontend():
     """启动前端开发服务器"""
     print("🚀 启动前端开发服务器...")
     frontend_dir = Path(__file__).parent / "frontend"
+    npm_cmd = get_npm_command()
 
     try:
         # 检查是否在正确的目录
@@ -57,8 +69,8 @@ def start_frontend():
 
         # 启动前端开发服务器
         process = subprocess.Popen([
-            "npm", "run", "dev"
-        ], cwd=frontend_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            npm_cmd, "run", "dev"
+        ], cwd=frontend_dir)
 
         # 等待服务器启动
         time.sleep(5)
@@ -76,6 +88,7 @@ def start_frontend():
         print(f"❌ 启动前端开发服务器时出错: {e}")
         return None
 
+
 def check_dependencies():
     """检查依赖"""
     print("🔍 检查依赖...")
@@ -83,33 +96,42 @@ def check_dependencies():
     # 检查Python
     try:
         result = subprocess.run([sys.executable, "--version"], capture_output=True, text=True)
-        print(f"✅ Python版本: {result.stdout.strip()}")
-    except:
-        print("❌ Python未安装或不在PATH中")
+        print(f"✅ Python版本: {result.stdout.strip() or result.stderr.strip()}")
+    except Exception as e:
+        print(f"❌ Python未安装或不在PATH中: {e}")
         return False
 
     # 检查Node.js
     try:
         result = subprocess.run(["node", "--version"], capture_output=True, text=True)
         print(f"✅ Node.js版本: {result.stdout.strip()}")
-    except:
-        print("❌ Node.js未安装或不在PATH中")
+    except Exception as e:
+        print(f"❌ Node.js未安装或不在PATH中: {e}")
         return False
 
     # 检查npm
+    npm_cmd = get_npm_command()
     try:
-        result = subprocess.run(["npm", "--version"], capture_output=True, text=True)
-        print(f"✅ npm版本: {result.stdout.strip()}")
-    except:
+        result = subprocess.run([npm_cmd, "--version"], capture_output=True, text=True)
+        output = result.stdout.strip() or result.stderr.strip()
+        if result.returncode == 0 and output:
+            print(f"✅ npm版本: {output}")
+        else:
+            print("❌ npm执行失败")
+            return False
+    except FileNotFoundError:
         print("❌ npm未安装或不在PATH中")
+        print("💡 提示: 在 Windows 上 npm 可能安装在 AppData\\Roaming\\npm 下，请检查 PATH 环境变量")
         return False
 
     return True
+
 
 def install_frontend_dependencies():
     """安装前端依赖"""
     print("📦 检查前端依赖...")
     frontend_dir = Path(__file__).parent / "frontend"
+    npm_cmd = get_npm_command()
 
     try:
         # 检查node_modules是否存在
@@ -118,7 +140,7 @@ def install_frontend_dependencies():
             return True
 
         print("📦 安装前端依赖...")
-        result = subprocess.run(["npm", "install"], cwd=frontend_dir, capture_output=True, text=True)
+        result = subprocess.run([npm_cmd, "install"], cwd=frontend_dir, capture_output=True, text=True)
         if result.returncode == 0:
             print("✅ 前端依赖安装成功")
             return True
@@ -128,6 +150,7 @@ def install_frontend_dependencies():
     except Exception as e:
         print(f"❌ 安装前端依赖时出错: {e}")
         return False
+
 
 def wait_for_user_input():
     """等待用户输入来停止服务器"""
@@ -146,6 +169,7 @@ def wait_for_user_input():
             time.sleep(1)
     except KeyboardInterrupt:
         print("\n正在停止服务器...")
+
 
 def main():
     """主函数"""
@@ -188,6 +212,7 @@ def main():
         if frontend_process:
             frontend_process.terminate()
         print("✅ 所有服务器已停止")
+
 
 if __name__ == "__main__":
     main()
