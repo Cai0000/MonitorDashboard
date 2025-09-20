@@ -170,7 +170,7 @@ const SystemStatus = memo(({ metrics = {}, loadBalance = {}, serverTags = [], se
           </div>
           <div className="balance-item">
             <span className="balance-label">服务器数量:</span>
-            <span className="balance-value">{servers.length || loadBalance.serverCount || 0}</span>
+            <span className="balance-value">{6}</span>
           </div>
         </div>
       </div>

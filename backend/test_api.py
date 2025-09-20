@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-API测试脚本
-验证后端服务器的各项功能是否正常工作
-"""
-
 import requests
 import json
 import time

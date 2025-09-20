@@ -1,12 +1,11 @@
-import asyncio
 import random
 import time
 from collections import deque
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import List, Dict
 from models import (
-    Server, ServerMetrics, Task, Alert, LoadBalanceStatus,
-    SystemHealth, TimeSeriesData, ServerStatus, TaskStatus, AlertSeverity
+    ServerMetrics, LoadBalanceStatus,
+    SystemHealth, TimeSeriesData
 )
 
 class MockDataGenerator:

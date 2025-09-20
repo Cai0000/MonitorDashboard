@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Monitor Dashboard Backend Server
-启动脚本
-"""
-
 import subprocess
 import sys
 import os

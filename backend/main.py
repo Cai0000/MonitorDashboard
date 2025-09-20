@@ -1,9 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from typing import List, Optional, AsyncIterator
+from typing import Optional, AsyncIterator
 import asyncio
-import json
 from datetime import datetime, timedelta
 from models import *
 from data_generator_new import MockDataGenerator
