@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
 import './TaskManager.css';
 
 // Memoized TaskItem component to prevent unnecessary re-renders
@@ -42,6 +42,70 @@ const TaskManager = ({ tasks = [], alerts = [], clusters = [], servers = [] }) =
   const detailRef = useRef(null);
   const clusterDetailRef = useRef(null);
 
+  // 过滤器状态
+  const [filters, setFilters] = useState({
+    serverName: '',
+    selectedTags: [],
+    selectedRegion: ''
+  });
+
+  // 获取所有可用的标签和区域
+  const allTags = [...new Set(servers.flatMap(server => server.tags || []))];
+  const allRegions = [...new Set(servers.map(server => server.region).filter(Boolean))];
+
+  // 过滤逻辑
+  const filteredData = useMemo(() => {
+    // 过滤服务器
+    const filteredServers = servers.filter(server => {
+      if (filters.serverName && !server.name.toLowerCase().includes(filters.serverName.toLowerCase())) {
+        return false;
+      }
+      if (filters.selectedRegion && server.region !== filters.selectedRegion) {
+        return false;
+      }
+      if (filters.selectedTags.length > 0) {
+        const hasMatchingTag = filters.selectedTags.some(tag =>
+          server.tags && server.tags.includes(tag)
+        );
+        if (!hasMatchingTag) return false;
+      }
+      return true;
+    });
+
+    // 过滤集群 - 只显示包含过滤后服务器的集群
+    const filteredClusters = clusters
+      .filter(cluster =>
+        cluster.servers && cluster.servers.some(server =>
+          filteredServers.some(filteredServer => filteredServer.id === server.id)
+        )
+      )
+      .map(cluster => ({
+        ...cluster,
+        servers: cluster.servers.filter(server =>
+          filteredServers.some(filteredServer => filteredServer.id === server.id)
+        )
+      }));
+
+    // 过滤任务 - 基于集群过滤
+    const filteredTasks = tasks.filter(task => {
+      if (filteredClusters.length === 0) return true;
+      return filteredClusters.some(cluster => cluster.id === task.cluster);
+    });
+
+    // 过滤警报 - 基于服务器过滤
+    const filteredAlerts = alerts.filter(alert => {
+      if (filteredServers.length === 0) return true;
+      return filteredServers.some(server => server.id === alert.serverId);
+    });
+
+    return {
+      servers: filteredServers,
+      clusters: filteredClusters,
+      tasks: filteredTasks,
+      alerts: filteredAlerts
+    };
+  }, [servers, clusters, tasks, alerts, filters]);
+
   // Memoized callback functions
   const handleTaskClick = useCallback((task) => {
     setSelectedTask(task);
@@ -78,6 +142,37 @@ const TaskManager = ({ tasks = [], alerts = [], clusters = [], servers = [] }) =
     }
   }, []);
 
+  // 过滤器处理函数
+  const handleServerNameChange = useCallback((value) => {
+    setFilters(prev => ({ ...prev, serverName: value }));
+  }, []);
+
+  const handleRegionChange = useCallback((value) => {
+    setFilters(prev => ({ ...prev, selectedRegion: value }));
+  }, []);
+
+  const handleTagToggle = useCallback((tag) => {
+    setFilters(prev => ({
+      ...prev,
+      selectedTags: prev.selectedTags.includes(tag)
+        ? prev.selectedTags.filter(t => t !== tag)
+        : [...prev.selectedTags, tag]
+    }));
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setFilters({
+      serverName: '',
+      selectedTags: [],
+      selectedRegion: ''
+    });
+  }, []);
+
+  // 检查是否有激活的过滤器
+  const hasActiveFilters = useMemo(() => {
+    return filters.serverName || filters.selectedTags.length > 0 || filters.selectedRegion;
+  }, [filters]);
+
   // 点击外部关闭弹窗
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -97,11 +192,86 @@ const TaskManager = ({ tasks = [], alerts = [], clusters = [], servers = [] }) =
 
   return (
     <div className="task-manager">
+      {/* 过滤器部分 */}
+      <div className="filter-section">
+        <h3>服务器筛选</h3>
+
+        {/* 服务器名称搜索 */}
+        <div className="filter-group">
+          <label>服务器名称:</label>
+          <input
+            type="text"
+            placeholder="输入服务器名称..."
+            value={filters.serverName}
+            onChange={(e) => handleServerNameChange(e.target.value)}
+            className="filter-input"
+          />
+        </div>
+
+        {/* 区域选择 */}
+        <div className="filter-group">
+          <label>区域:</label>
+          <select
+            value={filters.selectedRegion}
+            onChange={(e) => handleRegionChange(e.target.value)}
+            className="filter-select"
+          >
+            <option value="">全部区域</option>
+            {allRegions.map(region => (
+              <option key={region} value={region}>{region}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* 标签选择 */}
+        <div className="filter-group">
+          <label>标签:</label>
+          <div className="tag-filters">
+            {allTags.map(tag => (
+              <button
+                key={tag}
+                className={`tag-filter-btn ${filters.selectedTags.includes(tag) ? 'active' : ''}`}
+                onClick={() => handleTagToggle(tag)}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 清除过滤器按钮 */}
+        {hasActiveFilters && (
+          <div className="filter-actions">
+            <button onClick={clearFilters} className="clear-filters-btn">
+              清除筛选
+            </button>
+          </div>
+        )}
+
+        {/* 当前筛选状态 */}
+        {hasActiveFilters && (
+          <div className="filter-status">
+            <h4>当前筛选:</h4>
+            <div className="active-filters">
+              {filters.serverName && (
+                <span className="active-filter">服务器: {filters.serverName}</span>
+              )}
+              {filters.selectedRegion && (
+                <span className="active-filter">区域: {filters.selectedRegion}</span>
+              )}
+              {filters.selectedTags.length > 0 && (
+                <span className="active-filter">标签: {filters.selectedTags.join(', ')}</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* 集群信息部分 */}
       <div className="cluster-section">
         <h2>集群信息</h2>
         <div className="cluster-list">
-          {clusters.map((cluster) => (
+          {filteredData.clusters.map((cluster) => (
             <div
               key={cluster.id}
               className={`cluster-item ${selectedCluster?.id === cluster.id ? 'selected' : ''}`}
@@ -125,9 +295,9 @@ const TaskManager = ({ tasks = [], alerts = [], clusters = [], servers = [] }) =
       </div>
 
       <div className="task-list-section">
-        <h2>任务列表</h2>
+        <h2>任务列表 ({filteredData.tasks.length})</h2>
         <div className="task-list">
-          {tasks.map((task) => (
+          {filteredData.tasks.map((task) => (
             <TaskItem
               key={task.id}
               task={task}
@@ -141,9 +311,9 @@ const TaskManager = ({ tasks = [], alerts = [], clusters = [], servers = [] }) =
       </div>
 
       <div className="alerts-section">
-        <h2>警报列表</h2>
+        <h2>警报列表 ({filteredData.alerts.length})</h2>
         <div className="alerts-list">
-          {alerts.map((alert) => (
+          {filteredData.alerts.map((alert) => (
             <div key={alert.id} className="alert-item">
               <div className="alert-header">
                 <span className="alert-time">{alert.time}</span>
