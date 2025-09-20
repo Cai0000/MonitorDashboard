@@ -9,6 +9,7 @@
 - 样式：CSS变量
 
 **AI 使用方式与关键收获**：
+
 开发该项目时，我使用了claude code（GLM4.5）、roo code（GLM4.5）、ChatGPT、doubao、lingma辅助开发，使用方式与体会如下：
 **Claude**
 - 使用方式：核心开发、主动测试
@@ -48,6 +49,7 @@
 	- 对于单个代码文件的解释与优化，豆包强于lingma，lingma可以分析2-3个代码文件之间的联系，但不支持大规模项目生成
 
 ## 项目结构设计
+```
 monitor-dashboard/
 ├─ backend/                          # 用于模拟 API
 │  ├─ data_generator_new.py          # 模拟数据生成
@@ -69,10 +71,11 @@ monitor-dashboard/
 ├─ README.md
 ├─ start_all.py                       # 启动所有服务
 └─ .gitignore
-
+```
 
 ## 运行说明
 **快速启动** 
+
 `MonitorDashboard/`
 ```bash
 python start_all.py
@@ -81,6 +84,7 @@ python start_all.py
 **分别启动**
 
 - 后端 
+
 `MonitorDashboard/backend`
 ```bash
 python start_server.py
@@ -91,6 +95,7 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 - 前端 
+
 `MonitorDashboard/frontend`
 ```bash
 npm install
