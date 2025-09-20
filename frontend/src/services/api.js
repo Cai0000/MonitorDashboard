@@ -28,10 +28,11 @@ class ApiService {
   }
 
   // 获取完整仪表板数据
+  /*
   async getDashboardData() {
     return this.request('/dashboard');
   }
-
+*/
   // 获取静态数据（集群、服务器等不常变的数据）
   async getStaticData() {
     return this.request('/dashboard/static');

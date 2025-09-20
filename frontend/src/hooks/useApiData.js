@@ -81,8 +81,8 @@ export const useApiData = () => {
     // 转换时间序列数据
     const transformedChartData = data.time_series?.map(item => ({
       timestamp: item.timestamp,
-      time: new Date(item.timestamp).toLocaleTimeString('zh-CN', { 
-        hour: '2-digit', 
+      time: new Date(item.timestamp).toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
       }),
@@ -93,6 +93,7 @@ export const useApiData = () => {
       tags: item.service_type ? [item.service_type] : []
     })) || [];
 
+    
     // 获取服务器标签
     const uniqueTags = [...new Set(data.servers?.flatMap(server => server.tags) || [])];
 
@@ -334,7 +335,7 @@ export const useApiData = () => {
 
     const interval = setInterval(() => {
       fetchData();
-    }, 5000); // 从2秒改为5秒
+    }, 2000); // 从2秒改为5秒
 
     return () => clearInterval(interval);
   }, [isStreaming, isSearchActive, fetchData]);

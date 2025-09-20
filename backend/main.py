@@ -61,14 +61,6 @@ app.add_middleware(
 async def root():
     return {"message": "Monitor Dashboard API is running", "timestamp": datetime.now()}
 
-@app.get("/api/dashboard")
-async def get_dashboard_data():
-    """获取仪表板概览数据"""
-    try:
-        return data_generator.get_dashboard_data()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"获取仪表板数据时出错: {str(e)}")
-
 @app.get("/api/dashboard/static")
 async def get_static_data():
     """获取静态数据（集群、服务器等不常变的数据）"""
