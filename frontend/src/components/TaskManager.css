@@ -149,7 +149,7 @@
 /* 集群信息样式 */
 .cluster-section {
   flex-shrink: 0;
-  height: 220px;
+  height: 270px;
   border-bottom: 1px solid var(--border-color);
   overflow: hidden;
 }
