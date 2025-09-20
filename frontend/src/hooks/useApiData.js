@@ -11,6 +11,9 @@ export const useApiData = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Add previous data refs for comparison
+  const prevDataRef = useRef({});
+
   const [tasks, setTasks] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [metrics, setMetrics] = useState({});
@@ -130,6 +133,44 @@ export const useApiData = () => {
     };
   }, []);
 
+  // Data comparison function to prevent unnecessary updates
+  const hasDataChanged = useCallback((newData, oldData) => {
+    if (!oldData || Object.keys(oldData).length === 0) return true;
+
+    // Compare critical dynamic data
+    const criticalFields = ['alerts', 'metrics', 'loadBalance', 'systemHealth', 'chartData'];
+
+    for (const field of criticalFields) {
+      if (field === 'alerts') {
+        // Compare alerts (only check latest 10)
+        const newAlerts = JSON.stringify(newData[field]?.slice(0, 10) || []);
+        const oldAlerts = JSON.stringify(oldData[field]?.slice(0, 10) || []);
+        if (newAlerts !== oldAlerts) return true;
+      } else if (field === 'chartData') {
+        // Only check if there are new data points
+        const newLength = newData[field]?.length || 0;
+        const oldLength = oldData[field]?.length || 0;
+        if (newLength !== oldLength) return true;
+
+        // Check latest data point
+        if (newLength > 0 && oldLength > 0) {
+          const newLatest = newData[field][newLength - 1];
+          const oldLatest = oldData[field][oldLength - 1];
+          if (newLatest.timestamp !== oldLatest.timestamp || newLatest.value !== oldLatest.value) {
+            return true;
+          }
+        }
+      } else {
+        // Compare other fields
+        if (JSON.stringify(newData[field]) !== JSON.stringify(oldData[field])) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }, []);
+
   // 获取增量时间序列数据
   const fetchIncrementalTimeSeries = useCallback(async () => {
     if (!lastTimestampRef.current) return null;
@@ -163,8 +204,18 @@ export const useApiData = () => {
     try {
       // 首次获取完整数据
       if (!lastTimestampRef.current) {
-        const data = await api.getDashboardData();
-        const transformed = transformData(data);
+        // 首次加载：分别获取静态和动态数据
+        const [staticData, dynamicData] = await Promise.all([
+          api.getStaticData(),
+          api.getDynamicData()
+        ]);
+
+        // 合并并转换数据
+        const combinedData = {
+          ...staticData,
+          ...dynamicData
+        };
+        const transformed = transformData(combinedData);
 
         // 设置最新时间戳
         if (transformed.chartData && transformed.chartData.length > 0) {
@@ -186,51 +237,33 @@ export const useApiData = () => {
         setServers(prevServers => transformed.servers);
         setClusters(prevClusters => transformed.clusters);
         setGroupedData(prevGroupedData => transformed.groupedData);
+
+        // Store current data for comparison
+        prevDataRef.current = transformed;
       } else {
-        // 增量更新：只获取时间序列数据
-        const incrementalData = await fetchIncrementalTimeSeries();
-        if (incrementalData) {
-          // 转换增量数据
-          const transformedIncremental = incrementalData.map(item => ({
-            timestamp: item.timestamp,
-            time: new Date(item.timestamp).toLocaleTimeString('zh-CN', {
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit'
-            }),
-            value: Math.round(item.value),
-            metric_type: item.metric_type,
-            serverId: item.server_id,
-            region: item.region,
-            tags: item.service_type ? [item.service_type] : []
-          }));
+        // 后续更新：只获取动态数据
+        const dynamicData = await api.getDynamicData();
+        const transformed = transformData(dynamicData);
 
-          // 将增量数据添加到现有图表数据中
-          setChartData(prevChartData => {
-            const combined = [...prevChartData, ...transformedIncremental];
-            // 按时间排序并去重
-            const unique = Array.from(new Map(combined.map(item => [item.timestamp, item])).values());
-            return unique.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-          });
+        // Check if data has actually changed before updating state
+        if (hasDataChanged(transformed, prevDataRef.current)) {
+          // 当搜索激活时，不更新任务列表，保持搜索结果
+          if (!isSearchActive) {
+            setTasks(prevTasks => transformed.tasks);
+          }
+
+          setAlerts(prevAlerts => transformed.alerts);
+          setMetrics(prevMetrics => transformed.metrics);
+          setLoadBalance(prevLoadBalance => transformed.loadBalance);
+          setSystemHealth(prevSystemHealth => transformed.systemHealth);
+          setChartData(prevChartData => transformed.chartData);
+
+          // Update previous data reference
+          prevDataRef.current = {
+            ...prevDataRef.current,
+            ...transformed
+          };
         }
-
-        // 其他数据继续完整获取（为了简化，也可以后续优化为增量）
-        const data = await api.getDashboardData();
-        const transformed = transformData(data);
-
-        // 当搜索激活时，不更新任务列表，保持搜索结果
-        if (!isSearchActive) {
-          setTasks(prevTasks => transformed.tasks);
-        }
-
-        setAlerts(prevAlerts => transformed.alerts);
-        setMetrics(prevMetrics => transformed.metrics);
-        setLoadBalance(prevLoadBalance => transformed.loadBalance);
-        setSystemHealth(prevSystemHealth => transformed.systemHealth);
-        setServerTags(prevServerTags => transformed.serverTags);
-        setServers(prevServers => transformed.servers);
-        setClusters(prevClusters => transformed.clusters);
-        setGroupedData(prevGroupedData => transformed.groupedData);
       }
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -238,7 +271,7 @@ export const useApiData = () => {
     } finally {
       setLoading(false);
     }
-  }, [isStreaming, isSearchActive, transformData, fetchIncrementalTimeSeries]);
+  }, [isStreaming, isSearchActive, transformData]);
 
   // 搜索功能
   const handleSearch = useCallback(async (term) => {
@@ -295,13 +328,13 @@ export const useApiData = () => {
     fetchData();
   }, [fetchData]);
 
-  // 定时更新数据
+  // 定时更新数据 - 降低频率到5秒
   useEffect(() => {
     if (!isStreaming) return;
 
     const interval = setInterval(() => {
       fetchData();
-    }, 2000);
+    }, 5000); // 从2秒改为5秒
 
     return () => clearInterval(interval);
   }, [isStreaming, isSearchActive, fetchData]);

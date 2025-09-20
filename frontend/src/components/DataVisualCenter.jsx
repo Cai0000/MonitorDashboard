@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import './DataVisualCenter.css';
 
 // Circular buffer implementation for time series data
@@ -1027,4 +1027,4 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
   );
 };
 
-export default DataVisualCenter;
+export default memo(DataVisualCenter);

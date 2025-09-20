@@ -69,6 +69,36 @@ async def get_dashboard_data():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取仪表板数据时出错: {str(e)}")
 
+@app.get("/api/dashboard/static")
+async def get_static_data():
+    """获取静态数据（集群、服务器等不常变的数据）"""
+    try:
+        static_data = {
+            "clusters": data_generator.clusters,
+            "servers": data_generator.servers,
+            "grouped_data": data_generator.get_grouped_server_data()
+        }
+        return static_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取静态数据时出错: {str(e)}")
+
+@app.get("/api/dashboard/dynamic")
+async def get_dynamic_data():
+    """获取动态数据（指标、告警、系统健康等）"""
+    try:
+        dynamic_data = {
+            "metrics": [data_generator._generate_single_server_metrics(server["serverId"]).dict()
+                       for server in data_generator.servers if data_generator._generate_single_server_metrics(server["serverId"])],
+            "alerts": list(data_generator.alerts_data)[-10:],
+            "system_health": data_generator.get_system_health().dict(),
+            "load_balance": data_generator.get_load_balance_status().dict(),
+            "time_series": [data.dict() for data in data_generator.time_series_data[-100:]],
+            "tasks": data_generator.tasks_data[-20:]  # 最新20个任务
+        }
+        return dynamic_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取动态数据时出错: {str(e)}")
+
 @app.get("/api/servers")
 async def get_servers(
     region: Optional[str] = Query(None, description="按区域筛选"),

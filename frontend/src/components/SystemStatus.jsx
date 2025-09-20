@@ -1,6 +1,7 @@
+import React, { memo } from 'react';
 import './SystemStatus.css';
 
-const SystemStatus = ({ metrics = {}, loadBalance = {}, serverTags = [], servers = [] }) => {
+const SystemStatus = memo(({ metrics = {}, loadBalance = {}, serverTags = [], servers = [] }) => {
   const getHealthColor = (health) => {
     switch (health) {
       case 'good': return 'var(--success-green)';
@@ -175,6 +176,6 @@ const SystemStatus = ({ metrics = {}, loadBalance = {}, serverTags = [], servers
       </div>
     </div>
   );
-};
+});
 
 export default SystemStatus;

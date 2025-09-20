@@ -1,5 +1,40 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import './TaskManager.css';
+
+// Memoized TaskItem component to prevent unnecessary re-renders
+const TaskItem = memo(({ task, onTaskClick, getStatusColor, getStatusText, isSelected }) => {
+  return (
+    <div
+      className={`task-item ${task.status} ${isSelected ? 'selected' : ''}`}
+      onClick={() => onTaskClick(task)}
+      style={{ cursor: 'pointer' }}
+    >
+      <div className="task-header">
+        <span className="task-name">{task.name}</span>
+        <span
+          className="task-status"
+          style={{ color: getStatusColor(task.status) }}
+        >
+          {getStatusText(task.status)}
+        </span>
+      </div>
+      <div className="task-cluster">{task.cluster}</div>
+      <div className="task-target-cluster">目标集群: {task.targetCluster || '无'}</div>
+      <div className="task-progress">
+        <div className="progress-bar">
+          <div
+            className="progress-fill"
+            style={{
+              width: `${task.progress}%`,
+              backgroundColor: getStatusColor(task.status)
+            }}
+          ></div>
+        </div>
+        <span className="progress-text">{task.progress}%</span>
+      </div>
+    </div>
+  );
+});
 
 const TaskManager = ({ tasks = [], alerts = [], clusters = [], servers = [] }) => {
   const [selectedTask, setSelectedTask] = useState(null);
@@ -7,34 +42,41 @@ const TaskManager = ({ tasks = [], alerts = [], clusters = [], servers = [] }) =
   const detailRef = useRef(null);
   const clusterDetailRef = useRef(null);
 
-  const getStatusColor = (status) => {
+  // Memoized callback functions
+  const handleTaskClick = useCallback((task) => {
+    setSelectedTask(task);
+  }, []);
+
+  const getStatusColor = useCallback((status) => {
     switch (status) {
       case 'completed': return 'var(--success-green)';
       case 'running': return 'var(--accent-blue)';
-      case 'pending': return 'var(--warning-yellow)';
+      case 'pending':
+      case 'queued': return 'var(--warning-yellow)';
       case 'failed': return 'var(--error-red)';
       default: return 'var(--text-secondary)';
     }
-  };
+  }, []);
 
-  const getStatusText = (status) => {
+  const getStatusText = useCallback((status) => {
     switch (status) {
-      case 'completed': return '✓ 完成';
-      case 'running': return '⏳ 运行中';
-      case 'pending': return '⏱️ 等待中';
-      case 'failed': return '✖️ 失败';
-      default: return '❓ 未知';
+      case 'completed': return '已完成';
+      case 'running': return '运行中';
+      case 'pending':
+      case 'queued': return '排队中';
+      case 'failed': return '已失败';
+      default: return '未知';
     }
-  };
+  }, []);
 
-  const getAlertSeverityColor = (severity) => {
+  const getAlertSeverityColor = useCallback((severity) => {
     switch (severity) {
       case 'high': return 'var(--error-red)';
       case 'medium': return 'var(--warning-yellow)';
       case 'low': return 'var(--success-green)';
       default: return 'var(--text-secondary)';
     }
-  };
+  }, []);
 
   // 点击外部关闭弹窗
   useEffect(() => {
@@ -86,35 +128,14 @@ const TaskManager = ({ tasks = [], alerts = [], clusters = [], servers = [] }) =
         <h2>任务列表</h2>
         <div className="task-list">
           {tasks.map((task) => (
-            <div
+            <TaskItem
               key={task.id}
-              className={`task-item ${selectedTask?.id === task.id ? 'selected' : ''}`}
-              onClick={() => setSelectedTask(task)}
-            >
-              <div className="task-header">
-                <span className="task-name">{task.name}</span>
-                <span
-                  className="task-status"
-                  style={{ color: getStatusColor(task.status) }}
-                >
-                  {getStatusText(task.status)}
-                </span>
-              </div>
-              <div className="task-cluster">{task.cluster}</div>
-              <div className="task-target-cluster">目标集群: {task.targetCluster || '无'}</div>
-              <div className="task-progress">
-                <div className="progress-bar">
-                  <div
-                    className="progress-fill"
-                    style={{
-                      width: `${task.progress}%`,
-                      backgroundColor: getStatusColor(task.status)
-                    }}
-                  ></div>
-                </div>
-                <span className="progress-text">{task.progress}%</span>
-              </div>
-            </div>
+              task={task}
+              onTaskClick={handleTaskClick}
+              getStatusColor={getStatusColor}
+              getStatusText={getStatusText}
+              isSelected={selectedTask?.id === task.id}
+            />
           ))}
         </div>
       </div>
