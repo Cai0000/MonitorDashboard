@@ -90,6 +90,7 @@ export const useApiData = () => {
       metric_type: item.metric_type,
       serverId: item.server_id,
       region: item.region,
+      service_type: item.service_type,
       tags: item.service_type ? [item.service_type] : []
     })) || [];
 
