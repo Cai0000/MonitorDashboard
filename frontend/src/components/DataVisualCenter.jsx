@@ -71,7 +71,7 @@ class CircularBuffer {
 }
 
 const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, tasks = [] }) => {
-  const [timeRange, setTimeRange] = useState('5m');
+  const [timeRange, setTimeRange] = useState('15m');
   const [dimension, setDimension] = useState('server');
   const [selectedTime, setSelectedTime] = useState(100); // 默认显示最新数据
   const [chartSize, setChartSize] = useState({ width: 600, height: 300 });
@@ -115,7 +115,7 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
         if (!serverBuffersRef.current[server.id]) {
           // Create circular buffer for time series data (15 minutes of data at 30s intervals = 30 data points)
           serverBuffersRef.current[server.id] = {
-            buffer: new CircularBuffer(30),
+            buffer: new CircularBuffer(90),
             serverInfo: {
               id: server.id,
               name: server.name,
@@ -183,7 +183,7 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
 
   // 根据时间选择过滤任务
   const getFilteredTasks = () => {
-    const timeRangeMinutes = getTimeRangeInMinutes();
+    const timeRangeMinutes = 15; // 固定15分钟范围
     const now = new Date();
     const timeOffset = ((100 - selectedTime) / 100) * timeRangeMinutes * 60 * 1000;
     const targetTime = new Date(now.getTime() - timeOffset);
@@ -207,7 +207,7 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
 
   // 获取当前显示的时间
   const getCurrentDisplayTime = () => {
-    const timeRangeMinutes = getTimeRangeInMinutes();
+    const timeRangeMinutes = 15; // 固定15分钟范围
     const now = new Date();
     const timeOffset = ((100 - selectedTime) / 100) * timeRangeMinutes * 60 * 1000;
     const targetTime = new Date(now.getTime() - timeOffset);
@@ -293,6 +293,20 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
       groupedByServer[item.serverId].push(item);
     });
 
+    // 对每个服务器的数据进行采样，减少密度
+    Object.keys(groupedByServer).forEach(serverId => {
+      const serverData = groupedByServer[serverId];
+      if (serverData.length > 20) {
+        // 如果数据点超过20个，进行采样
+        const step = Math.ceil(serverData.length / 20);
+        groupedByServer[serverId] = serverData.filter((_, index) => index % step === 0);
+        // 确保包含最后一个数据点
+        if (groupedByServer[serverId][groupedByServer[serverId].length - 1] !== serverData[serverData.length - 1]) {
+          groupedByServer[serverId].push(serverData[serverData.length - 1]);
+        }
+      }
+    });
+
     // 为每个服务器生成颜色
     const serverColors = {};
     const serverIds = Object.keys(groupedByServer);
@@ -313,14 +327,22 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
       serverColors[serverId] = colors[index % colors.length];
     });
 
-    // 生成时间标签（每10个点显示一个时间标签）
+    // 生成时间标签（基于采样后的数据点）
     const timeLabels = [];
-    const step = Math.max(1, Math.floor(processedData.length / 5));
-    for (let i = 0; i < processedData.length; i += step) {
-      timeLabels.push({
-        x: padding + (i / (processedData.length - 1)) * chartWidth,
-        time: processedData[i].displayTime
+    const allTimePoints = processedData.map(item => new Date(item.timestamp).getTime());
+    const minTime = Math.min(...allTimePoints);
+    const maxTime = Math.max(...allTimePoints);
+
+    // 生成5个时间标签
+    for (let i = 0; i <= 4; i++) {
+      const timeRatio = i / 4;
+      const targetTime = minTime + (maxTime - minTime) * timeRatio;
+      const x = padding + timeRatio * chartWidth;
+      const timeStr = new Date(targetTime).toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit'
       });
+      timeLabels.push({ x, time: timeStr });
     }
 
     return (
