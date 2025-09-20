@@ -148,19 +148,9 @@ export const useApiData = () => {
         const oldAlerts = JSON.stringify(oldData[field]?.slice(0, 10) || []);
         if (newAlerts !== oldAlerts) return true;
       } else if (field === 'chartData') {
-        // Only check if there are new data points
-        const newLength = newData[field]?.length || 0;
-        const oldLength = oldData[field]?.length || 0;
-        if (newLength !== oldLength) return true;
-
-        // Check latest data point
-        if (newLength > 0 && oldLength > 0) {
-          const newLatest = newData[field][newLength - 1];
-          const oldLatest = oldData[field][oldLength - 1];
-          if (newLatest.timestamp !== oldLatest.timestamp || newLatest.value !== oldLatest.value) {
-            return true;
-          }
-        }
+        // For time series data, always allow updates to ensure smooth chart animation
+        // Always return true for chartData to ensure real-time updates
+        return true;
       } else {
         // Compare other fields
         if (JSON.stringify(newData[field]) !== JSON.stringify(oldData[field])) {
@@ -205,16 +195,18 @@ export const useApiData = () => {
     try {
       // 首次获取完整数据
       if (!lastTimestampRef.current) {
-        // 首次加载：分别获取静态和动态数据
-        const [staticData, dynamicData] = await Promise.all([
+        // 首次加载：分别获取静态、动态和时间序列数据
+        const [staticData, dynamicData, timeSeriesData] = await Promise.all([
           api.getStaticData(),
-          api.getDynamicData()
+          api.getDynamicData(),
+          api.getTimeSeriesData({ minutes: 30 }) // 获取30分钟的时间序列数据
         ]);
 
         // 合并并转换数据
         const combinedData = {
           ...staticData,
-          ...dynamicData
+          ...dynamicData,
+          time_series: timeSeriesData // 使用独立的时间序列数据
         };
         const transformed = transformData(combinedData);
 
@@ -242,9 +234,19 @@ export const useApiData = () => {
         // Store current data for comparison
         prevDataRef.current = transformed;
       } else {
-        // 后续更新：只获取动态数据
-        const dynamicData = await api.getDynamicData();
-        const transformed = transformData(dynamicData);
+        // 后续更新：获取动态数据，并定期获取时间序列数据
+        const [dynamicData, timeSeriesData] = await Promise.all([
+          api.getDynamicData(),
+          // 每次更新都获取时间序列数据，确保图表实时更新
+          api.getTimeSeriesData({ minutes: 30 })
+        ]);
+
+        // 合并数据
+        const combinedData = {
+          ...dynamicData,
+          time_series: timeSeriesData.length > 0 ? timeSeriesData : dynamicData.time_series
+        };
+        const transformed = transformData(combinedData);
 
         // Check if data has actually changed before updating state
         if (hasDataChanged(transformed, prevDataRef.current)) {
@@ -329,13 +331,13 @@ export const useApiData = () => {
     fetchData();
   }, [fetchData]);
 
-  // 定时更新数据 - 降低频率到5秒
+  // 定时更新数据 - 降低频率到3秒
   useEffect(() => {
     if (!isStreaming) return;
 
     const interval = setInterval(() => {
       fetchData();
-    }, 2000); // 从2秒改为5秒
+    }, 3000); // 设置为3秒以平衡性能和实时性
 
     return () => clearInterval(interval);
   }, [isStreaming, isSearchActive, fetchData]);

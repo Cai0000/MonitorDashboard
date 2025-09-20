@@ -196,12 +196,12 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
     });
   };
 
-  // 过滤图表数据
-  const filteredChartData = historicalData.filter(item => {
+  // 过滤图表数据 - 直接使用chartData而不是historicalData
+  const filteredChartData = chartData.filter(item => {
     if (selectedMetric && item.metric_type !== selectedMetric) return false;
     if (selectedServer && item.serverId !== selectedServer) return false;
     if (selectedRegion && item.region !== selectedRegion) return false;
-    if (selectedTag && item.service_type !== selectedTag) return false;
+    if (selectedTag && (!item.tags || !item.tags.includes(selectedTag))) return false;
     return true;
   });
 
