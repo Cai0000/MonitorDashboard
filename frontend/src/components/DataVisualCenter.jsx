@@ -152,32 +152,45 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
 
   // 根据滑块位置计算历史数据
   const getHistoricalData = useCallback(() => {
-    const timeRangeMinutes = getTimeRangeInMinutes();
+    // 固定时间范围为15分钟
+    const timeRangeMinutes = 15;
     const now = new Date();
 
     // 计算滑块对应的时间点（100表示最新，0表示最旧）
     const timeOffset = ((100 - selectedTime) / 100) * timeRangeMinutes * 60 * 1000;
     const targetTime = new Date(now.getTime() - timeOffset);
 
-    // Collect data from all server buffers
-    const allData = [];
-    Object.values(serverBuffersRef.current).forEach(serverBuffer => {
-      const serverData = serverBuffer.buffer.getAll();
-      allData.push(...serverData);
+    // 过滤出符合当前筛选条件的数据
+    let filteredData = chartData.filter(item => {
+      if (selectedMetric && item.metric_type !== selectedMetric) return false;
+      if (selectedServer && item.serverId !== selectedServer) return false;
+      if (selectedRegion && item.region !== selectedRegion) return false;
+      if (selectedTag && item.service_type !== selectedTag) return false;
+      return true;
     });
 
-    // 创建时间窗口：从目标时间往前5分钟到目标时间，确保显示足够的数据点
-    const windowStart = new Date(targetTime.getTime() - 2 * 60 * 1000); // 5分钟前
-    const windowEnd = targetTime;
+    // 按时间排序
+    filteredData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    // 过滤在时间窗口内的数据
-    const filteredData = allData.filter(item => {
-      const itemTime = new Date(item.timestamp);
-      return itemTime >= windowStart && itemTime <= windowEnd;
-    });
+    // 找到最接近目标时间的数据点索引
+    let closestIndex = 0;
+    let minDiff = Math.abs(new Date(filteredData[0]?.timestamp).getTime() - targetTime.getTime());
+    
+    for (let i = 1; i < filteredData.length; i++) {
+      const diff = Math.abs(new Date(filteredData[i].timestamp).getTime() - targetTime.getTime());
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIndex = i;
+      }
+    }
 
-    return filteredData;
-  }, [selectedTime, timeRange]);
+    // 取目标时间点前后各10个数据点（总共21个点）
+    const startIndex = Math.max(0, closestIndex - 10);
+    const endIndex = Math.min(filteredData.length - 1, closestIndex + 10);
+    const result = filteredData.slice(startIndex, endIndex + 1);
+
+    return result;
+  }, [selectedTime, chartData, selectedMetric, selectedServer, selectedRegion, selectedTag]);
 
   const historicalData = getHistoricalData();
 
@@ -196,8 +209,8 @@ const DataVisualCenter = ({ chartData = [], servers = [], groupedData = {}, task
     });
   };
 
-  // 过滤图表数据 - 直接使用chartData而不是historicalData
-  const filteredChartData = chartData.filter(item => {
+  // 过滤图表数据 - 使用historicalData而不是直接使用chartData
+  const filteredChartData = historicalData.filter(item => {
     if (selectedMetric && item.metric_type !== selectedMetric) return false;
     if (selectedServer && item.serverId !== selectedServer) return false;
     if (selectedRegion && item.region !== selectedRegion) return false;
