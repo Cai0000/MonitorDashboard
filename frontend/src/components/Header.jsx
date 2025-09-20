@@ -25,6 +25,7 @@ const Header = ({ onSearch, onToggleStream, onRefresh, isStreaming }) => {
     <header className="monitor-header">
       <div className="header-left">
         <h1>监控面板</h1>
+        {/*
         <div className="search-container">
           <input
             type="text"
@@ -34,6 +35,7 @@ const Header = ({ onSearch, onToggleStream, onRefresh, isStreaming }) => {
             onKeyPress={(e) => e.key === 'Enter' && handleSearchSubmit()}
             className="search-input"
           />
+          {/*
           {searchTerm && (
             <button
               onClick={handleClearSearch}
@@ -42,6 +44,7 @@ const Header = ({ onSearch, onToggleStream, onRefresh, isStreaming }) => {
               ×
             </button>
           )}
+          
           <button
             onClick={handleSearchSubmit}
             className="search-btn"
@@ -49,6 +52,7 @@ const Header = ({ onSearch, onToggleStream, onRefresh, isStreaming }) => {
             🔍
           </button>
         </div>
+        */}
       </div>
 
       <div className="header-center">
