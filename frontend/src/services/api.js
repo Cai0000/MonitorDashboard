@@ -28,8 +28,19 @@ class ApiService {
   }
 
   // 获取完整仪表板数据
+  /*
   async getDashboardData() {
     return this.request('/dashboard');
+  }
+*/
+  // 获取静态数据（集群、服务器等不常变的数据）
+  async getStaticData() {
+    return this.request('/dashboard/static');
+  }
+
+  // 获取动态数据（指标、告警、系统健康等）
+  async getDynamicData() {
+    return this.request('/dashboard/dynamic');
   }
 
   // 获取服务器列表

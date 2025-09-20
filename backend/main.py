@@ -1,12 +1,10 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from typing import List, Optional, AsyncIterator
+from typing import Optional, AsyncIterator
 import asyncio
-import json
 from datetime import datetime, timedelta
 from models import *
-from data_generator import MockDataGenerator
+from data_generator_new import MockDataGenerator
 from contextlib import asynccontextmanager
 
 # 初始化数据生成器
@@ -27,7 +25,7 @@ async def background_data_updater():
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 应用启动时执行
     # 初始化时间序列数据
-    data_generator.time_series_data = data_generator.generate_time_series_data(minutes=30)
+    data_generator.time_series_data = data_generator._generate_time_series_data(minutes=30)
 
     # 启动后台数据更新任务
     asyncio.create_task(background_data_updater())
@@ -61,13 +59,35 @@ app.add_middleware(
 async def root():
     return {"message": "Monitor Dashboard API is running", "timestamp": datetime.now()}
 
-@app.get("/api/dashboard")
-async def get_dashboard_data():
-    """获取仪表板概览数据"""
+@app.get("/api/dashboard/static")
+async def get_static_data():
+    """获取静态数据（集群、服务器等不常变的数据）"""
     try:
-        return data_generator.get_dashboard_data()
+        static_data = {
+            "clusters": data_generator.clusters,
+            "servers": data_generator.servers,
+            "grouped_data": data_generator.get_grouped_server_data()
+        }
+        return static_data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"获取仪表板数据时出错: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取静态数据时出错: {str(e)}")
+
+@app.get("/api/dashboard/dynamic")
+async def get_dynamic_data():
+    """获取动态数据（指标、告警、系统健康等）"""
+    try:
+        dynamic_data = {
+            "metrics": [data_generator._generate_single_server_metrics(server["serverId"]).dict()
+                       for server in data_generator.servers if data_generator._generate_single_server_metrics(server["serverId"])],
+            "alerts": list(data_generator.alerts_data)[-10:],
+            "system_health": data_generator.get_system_health().dict(),
+            "load_balance": data_generator.get_load_balance_status().dict(),
+            "time_series": [data.dict() for data in data_generator.time_series_data[-100:]],
+            "tasks": data_generator.tasks_data[-20:]  # 最新20个任务
+        }
+        return dynamic_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取动态数据时出错: {str(e)}")
 
 @app.get("/api/servers")
 async def get_servers(
@@ -183,15 +203,48 @@ async def get_load_balance():
 async def get_time_series_data(
     metric_type: Optional[str] = Query(None, description="指标类型: cpu_usage, memory_usage, disk_usage, network_traffic"),
     region: Optional[str] = Query(None, description="按区域筛选"),
-    minutes: int = Query(30, description="时间范围（分钟）")
+    server_id: Optional[str] = Query(None, description="按服务器ID筛选"),
+    minutes: int = Query(30, description="时间范围（分钟）"),
+    after: Optional[str] = Query(None, description="只返回此时间之后的数据，ISO格式")
 ):
     """获取时间序列数据"""
     try:
         data = data_generator.time_series_data
 
         # 按时间范围筛选
-        cutoff_time = datetime.now() - timedelta(minutes=minutes)
+        cutoff_time = datetime.now()
+        # 确保cutoff_time是naive datetime（无时区信息）
+        if cutoff_time.tzinfo is not None:
+            cutoff_time = cutoff_time.replace(tzinfo=None)
+        cutoff_time = cutoff_time - timedelta(minutes=minutes)
         data = [d for d in data if d.timestamp >= cutoff_time]
+
+        # 按 after 参数筛选
+        if after:
+            try:
+                # 更健壮的时间解析逻辑
+                if 'T' in after and ('Z' in after or '+' in after or after.count('-') > 2):
+                    # ISO format with timezone
+                    if after.endswith('Z'):
+                        after_time = datetime.fromisoformat(after.replace('Z', '+00:00'))
+                    else:
+                        after_time = datetime.fromisoformat(after)
+                else:
+                    # Try to parse as a general date string
+                    after_time = datetime.fromisoformat(after)
+                
+                # 确保after_time是naive datetime（无时区信息）
+                if after_time.tzinfo is not None:
+                    # 如果有时区信息，转换为UTC然后移除时区信息
+                    after_time = after_time.utctimetuple()
+                    after_time = datetime(*after_time[:6])
+                
+                # Filter data after the specified time
+                data = [d for d in data if d.timestamp >= after_time]
+            except (ValueError, TypeError) as e:
+                # 如果时间格式不正确，记录日志并忽略 after 参数
+                print(f"Warning: 时间解析错误，忽略after参数: {e}")
+                pass
 
         # 按指标类型筛选
         if metric_type:
@@ -200,9 +253,16 @@ async def get_time_series_data(
         # 按区域筛选
         if region:
             data = [d for d in data if d.region == region]
+            
+        # 按服务器ID筛选
+        if server_id:
+            data = [d for d in data if d.server_id == server_id]
 
         return [item.dict() for item in data]
     except Exception as e:
+        print(f"获取时间序列数据时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()  # 打印详细的错误堆栈
         raise HTTPException(status_code=500, detail=f"获取时间序列数据时出错: {str(e)}")
 
 @app.get("/api/stats")

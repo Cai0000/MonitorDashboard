@@ -1,12 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 
 export const useApiData = () => {
   const [isStreaming, setIsStreaming] = useState(true);
+
+  // Track the latest timestamp for incremental updates
+  const lastTimestampRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Add previous data refs for comparison
+  const prevDataRef = useRef({});
 
   const [tasks, setTasks] = useState([]);
   const [alerts, setAlerts] = useState([]);
@@ -16,6 +22,8 @@ export const useApiData = () => {
   const [systemHealth, setSystemHealth] = useState({});
   const [serverTags, setServerTags] = useState([]);
   const [servers, setServers] = useState([]);
+  const [clusters, setClusters] = useState([]);
+  const [groupedData, setGroupedData] = useState({});
 
   // 转换后端数据格式为前端需要的格式
   const transformData = useCallback((data) => {
@@ -23,23 +31,30 @@ export const useApiData = () => {
 
     // 转换任务数据
     const transformedTasks = data.tasks?.map(task => ({
-      id: task.id,
-      name: task.name,
+      id: task.taskId,
+      name: task.taskName,
       cluster: task.cluster,
-      targetCluster: task.target_cluster,
+      targetCluster: task.targetCluster,
       status: task.status,
       progress: task.progress,
-      startTime: new Date(task.start_time).toLocaleString('zh-CN'),
-      estimatedEnd: new Date(task.estimated_end_time).toLocaleString('zh-CN')
+      startTime: new Date(task.startTime).toLocaleString('zh-CN'),
+      estimatedEnd: new Date(task.estimatedEndTime).toLocaleString('zh-CN'),
+      description: task.description,
+      // 添加原始时间戳用于时间过滤
+      startTimeTimestamp: new Date(task.startTime).getTime(),
+      estimatedEndTimeTimestamp: new Date(task.estimatedEndTime).getTime(),
+      createdAt: task.createdAt || new Date().getTime()
     })) || [];
 
     // 转换告警数据
     const transformedAlerts = data.alerts?.map(alert => ({
-      id: alert.id,
+      id: alert.alarmId,
       time: new Date(alert.timestamp).toLocaleTimeString('zh-CN'),
-      source: alert.server_id,
+      source: alert.source,
+      serverId: alert.serverId,
       severity: alert.severity,
-      message: alert.message
+      message: alert.message,
+      resolved: alert.resolved
     })) || [];
 
     // 转换指标数据 - 使用第一个服务器的指标作为系统指标
@@ -64,24 +79,46 @@ export const useApiData = () => {
     };
 
     // 转换时间序列数据
-    const transformedChartData = data.time_series
-      ?.filter(item => item.metric_type === 'cpu_usage')
-      .map(item => ({
-        time: new Date(item.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-        value: Math.round(item.value)
-      })) || [];
+    const transformedChartData = data.time_series?.map(item => ({
+      timestamp: item.timestamp,
+      time: new Date(item.timestamp).toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }),
+      value: Math.round(item.value),
+      metric_type: item.metric_type,
+      serverId: item.server_id,
+      region: item.region,
+      service_type: item.service_type,
+      tags: item.service_type ? [item.service_type] : []
+    })) || [];
 
+    
     // 获取服务器标签
     const uniqueTags = [...new Set(data.servers?.flatMap(server => server.tags) || [])];
 
     // 转换服务器数据
     const transformedServers = data.servers?.map(server => ({
-      id: server.id,
-      name: server.name,
+      id: server.serverId,
+      name: server.serverName,
       region: server.region,
-      tags: server.tags,
+      tags: [server.serviceType, ...server.tags],
       status: server.status,
-      ip_address: server.ip_address
+      serviceType: server.serviceType,
+      clusterId: server.clusterId,
+      ip_address: server.ipAddress
+    })) || [];
+
+    // 转换集群数据
+    const transformedClusters = data.clusters?.map(cluster => ({
+      id: cluster.clusterId,
+      name: cluster.clusterName,
+      region: cluster.region,
+      tags: cluster.tags,
+      serviceType: cluster.serviceType,
+      serverIds: cluster.serverIds,
+      servers: transformedServers.filter(server => cluster.serverIds.includes(server.id))
     })) || [];
 
     return {
@@ -92,30 +129,146 @@ export const useApiData = () => {
       chartData: transformedChartData,
       systemHealth: data.system_health || {},
       serverTags: uniqueTags,
-      servers: transformedServers
+      servers: transformedServers,
+      clusters: transformedClusters,
+      groupedData: data.grouped_data || {}
     };
+  }, []);
+
+  // Data comparison function to prevent unnecessary updates
+  const hasDataChanged = useCallback((newData, oldData) => {
+    if (!oldData || Object.keys(oldData).length === 0) return true;
+
+    // Compare critical dynamic data
+    const criticalFields = ['alerts', 'metrics', 'loadBalance', 'systemHealth', 'chartData'];
+
+    for (const field of criticalFields) {
+      if (field === 'alerts') {
+        // Compare alerts (only check latest 10)
+        const newAlerts = JSON.stringify(newData[field]?.slice(0, 10) || []);
+        const oldAlerts = JSON.stringify(oldData[field]?.slice(0, 10) || []);
+        if (newAlerts !== oldAlerts) return true;
+      } else if (field === 'chartData') {
+        // For time series data, always allow updates to ensure smooth chart animation
+        // Always return true for chartData to ensure real-time updates
+        return true;
+      } else {
+        // Compare other fields
+        if (JSON.stringify(newData[field]) !== JSON.stringify(oldData[field])) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }, []);
+
+  // 获取增量时间序列数据
+  const fetchIncrementalTimeSeries = useCallback(async () => {
+    if (!lastTimestampRef.current) return null;
+
+    try {
+      const incrementalData = await api.getTimeSeriesData({
+        after: lastTimestampRef.current.toISOString(),
+        minutes: 5 // 获取最近5分钟的数据
+      });
+
+      if (incrementalData && incrementalData.length > 0) {
+        // 更新最新时间戳
+        const latestTimestamp = new Date(Math.max(...incrementalData.map(item => new Date(item.timestamp))));
+        lastTimestampRef.current = latestTimestamp;
+
+        return incrementalData;
+      }
+    } catch (err) {
+      console.error('Error fetching incremental time series data:', err);
+    }
+    return null;
   }, []);
 
   // 获取数据
   const fetchData = useCallback(async () => {
-    if (!isStreaming || isSearchActive) return;
+    if (!isStreaming) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const data = await api.getDashboardData();
-      const transformed = transformData(data);
+      // 首次获取完整数据
+      if (!lastTimestampRef.current) {
+        // 首次加载：分别获取静态、动态和时间序列数据
+        const [staticData, dynamicData, timeSeriesData] = await Promise.all([
+          api.getStaticData(),
+          api.getDynamicData(),
+          api.getTimeSeriesData({ minutes: 30 }) // 获取30分钟的时间序列数据
+        ]);
 
-      // 使用状态更新函数来避免闪动
-      setTasks(prevTasks => transformed.tasks);
-      setAlerts(prevAlerts => transformed.alerts);
-      setMetrics(prevMetrics => transformed.metrics);
-      setLoadBalance(prevLoadBalance => transformed.loadBalance);
-      setChartData(prevChartData => transformed.chartData);
-      setSystemHealth(prevSystemHealth => transformed.systemHealth);
-      setServerTags(prevServerTags => transformed.serverTags);
-      setServers(prevServers => transformed.servers);
+        // 合并并转换数据
+        const combinedData = {
+          ...staticData,
+          ...dynamicData,
+          time_series: timeSeriesData // 使用独立的时间序列数据
+        };
+        const transformed = transformData(combinedData);
+
+        // 设置最新时间戳
+        if (transformed.chartData && transformed.chartData.length > 0) {
+          const latestTimestamp = new Date(Math.max(...transformed.chartData.map(item => new Date(item.timestamp))));
+          lastTimestampRef.current = latestTimestamp;
+        }
+
+        // 当搜索激活时，不更新任务列表，保持搜索结果
+        if (!isSearchActive) {
+          setTasks(prevTasks => transformed.tasks);
+        }
+
+        setAlerts(prevAlerts => transformed.alerts);
+        setMetrics(prevMetrics => transformed.metrics);
+        setLoadBalance(prevLoadBalance => transformed.loadBalance);
+        setChartData(prevChartData => transformed.chartData);
+        setSystemHealth(prevSystemHealth => transformed.systemHealth);
+        setServerTags(prevServerTags => transformed.serverTags);
+        setServers(prevServers => transformed.servers);
+        setClusters(prevClusters => transformed.clusters);
+        setGroupedData(prevGroupedData => transformed.groupedData);
+
+        // Store current data for comparison
+        prevDataRef.current = transformed;
+      } else {
+        // 后续更新：获取动态数据，并定期获取时间序列数据
+        const [dynamicData, timeSeriesData] = await Promise.all([
+          api.getDynamicData(),
+          // 每次更新都获取时间序列数据，确保图表实时更新
+          api.getTimeSeriesData({ minutes: 30 })
+        ]);
+
+        // 合并数据
+        const combinedData = {
+          ...dynamicData,
+          time_series: timeSeriesData.length > 0 ? timeSeriesData : dynamicData.time_series
+        };
+        const transformed = transformData(combinedData);
+
+        // Check if data has actually changed before updating state
+        if (hasDataChanged(transformed, prevDataRef.current)) {
+          // 当搜索激活时，不更新任务列表，保持搜索结果
+          if (!isSearchActive) {
+            setTasks(prevTasks => transformed.tasks);
+          }
+
+          setAlerts(prevAlerts => transformed.alerts);
+          setMetrics(prevMetrics => transformed.metrics);
+          setLoadBalance(prevLoadBalance => transformed.loadBalance);
+          setSystemHealth(prevSystemHealth => transformed.systemHealth);
+          setChartData(prevChartData => transformed.chartData);
+
+          // Update previous data reference
+          prevDataRef.current = {
+            ...prevDataRef.current,
+            ...transformed
+          };
+        }
+      }
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err.message);
@@ -138,12 +291,8 @@ export const useApiData = () => {
     try {
       const results = await api.searchData(term);
 
-      // 合并搜索结果
-      const allTasks = results.tasks || [];
-      const allAlerts = results.alerts || [];
-
       // 转换搜索结果
-      const transformedTasks = allTasks.map(task => ({
+      const transformedTasks = results.tasks?.map(task => ({
         id: task.id,
         name: task.name,
         cluster: task.cluster,
@@ -152,17 +301,19 @@ export const useApiData = () => {
         progress: task.progress,
         startTime: new Date(task.start_time).toLocaleString('zh-CN'),
         estimatedEnd: new Date(task.estimated_end_time).toLocaleString('zh-CN')
-      }));
+      })) || [];
 
-      const transformedAlerts = allAlerts.map(alert => ({
+      const transformedAlerts = results.alerts?.map(alert => ({
         id: alert.id,
         time: new Date(alert.timestamp).toLocaleTimeString('zh-CN'),
-        source: alert.server_id,
+        source: alert.source,
+        serverId: alert.server_id,
         severity: alert.severity,
-        message: alert.message
-      }));
+        message: alert.message,
+        resolved: alert.resolved
+      })) || [];
 
-      // 使用状态更新函数来避免闪动
+      // 更新搜索结果
       setTasks(prevTasks => transformedTasks);
       setAlerts(prevAlerts => transformedAlerts);
     } catch (err) {
@@ -181,16 +332,16 @@ export const useApiData = () => {
     fetchData();
   }, [fetchData]);
 
-  // 定时更新数据
+  // 定时更新数据 - 降低频率到3秒
   useEffect(() => {
     if (!isStreaming) return;
 
     const interval = setInterval(() => {
       fetchData();
-    }, 2000);
+    }, 3000); // 设置为3秒以平衡性能和实时性
 
     return () => clearInterval(interval);
-  }, [isStreaming, fetchData]);
+  }, [isStreaming, isSearchActive, fetchData]);
 
   return {
     isStreaming,
@@ -207,6 +358,8 @@ export const useApiData = () => {
     systemHealth,
     serverTags,
     servers,
-    refreshData
+    clusters,
+    refreshData,
+    groupedData
   };
 };
